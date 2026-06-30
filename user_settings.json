@@ -1,0 +1,36 @@
+{
+    "user_preferences": {"unit_distance": "mm","unit_angle": "deg","unit_speed": "rpm","last_part": 0,"last_tool": 0},
+    "units": {
+        "mm": {"type": "unit_distance","factor": 1000.0,"decimals": 3,"label": "mm"},
+        "inch": {"type": "unit_distance","factor": 25400.508026,"decimals": 5,"label": "in"},
+        "deg": {"type": "unit_angle","factor": 1000.0,"decimals": 2,"label": "°"},
+        "rad": {"type": "unit_angle","factor": 57295.77951308232,"decimals": 4,"label": "rad"},
+        "drad": {"type": "unit_angle","factor": 5729.577951308232,"decimals": 5,"label": "drad"},
+        "grade": {"type": "unit_angle","factor": 900.0,"decimals": 2,"label": "gon"},
+        "rpm": {"type": "unit_speed","factor": 60.00012000024,"decimals": 0,"label": "rpm"},
+        "rps": {"type": "unit_speed","factor": 1000.0,"decimals": 3,"label": "tr/s"},
+        "rad/s": {"type": "unit_speed","factor": 159.15494309189535,"decimals": 4,"label": "rad/s"}
+    },
+    "axis": {
+        "hor": {"screen": "Z","factor": 1,"numerator": 5,"denumerator": 1,"type": "unit_distance","last_position_micron": 123,"info": "profondeur trainard, absolu"},
+        "vert": {"screen": "X","factor": 2,"numerator": 5,"denumerator": 1,"type": "unit_distance","last_position_micron": 111111,"info": "diamètre transversale, absolu"},
+        "sup": {"screen": "Y","factor": 1,"numerator": 5,"denumerator": 1,"type": "unit_distance","last_position_micron": 890123,"angle": 45000,"info": "chariot porte outil, absolu + angle"},
+        "s": {"screen": "Spindel","factor": 1,"numerator": 360,"denumerator": 32768,"type": "unit_angle","last_position_micron": 0,"info": "position de la broche avec  TLE5012B (ou MT6835)"},
+        "r": {"screen": "r","factor": 1,"numerator": 5,"denumerator": 1,"type": "servo","info": "Servo sur vise mère: Inutilisé pour l'instant"},
+        "vert2": {"screen": "h","factor": 1,"numerator": 5,"denumerator": 1,"type": "unit_distance","info": "X_relatif au rayon"},
+        "hor2": {"screen": "p","factor": 1,"numerator": 1,"denumerator": 1,"type": "unit_distance","info": "Z_relatif"},
+        "l": {"screen": "l","factor": 1,"numerator": 1,"denumerator": 1,"type": "unit_distance","info": "Longeur du segment (h1'p1 / h2'p2)"},
+        "alpha": {"screen": "α","factor": 1,"numerator": 1,"denumerator": 1,"type": "unit_distance","info": "Pente du segment"},
+        "hor3": {"screen": "Longueur","factor": 1,"numerator": 1,"denumerator": 1,"type": "unit_distance","info": "Z + Y en Z (profondeur total absolu)"},
+        "vert3": {"screen": "Diamètre","factor": 2,"numerator": 1,"denumerator": 1,"type": "unit_distance","info": "X + Y en X (diamètre total absolu)"}
+    },
+    "shortcuts": {
+        "toggle_mirror": "Ctrl+M"
+    },
+    "user_config": {
+        "user_langage": "fr",
+        "draw_profil_scale_dp": 0.005,
+        "theme_name": "dark",
+        "theme_path": "..."
+    }
+}

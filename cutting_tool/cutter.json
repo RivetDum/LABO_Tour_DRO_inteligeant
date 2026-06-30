@@ -1,0 +1,99 @@
+{
+    "cutt_profile": {
+        "1": {
+            "nom": "CCMT?9",
+            "desc": "Plaquette ébauche hasard",
+            "radius": 400,
+            "ref_dir":[3678,8835],
+            "points": [
+                {"pos": [-400,-400],"shape": ["standard","Congé"],"shape_label": "Congé (R=0.4)","shape_params": {"rayon_conge": 400}},
+                {"pos": [-400,4235],"shape": ["standard","Congé"],"shape_label": "Congé (R=0.4)","shape_params": {"rayon_conge": 400}},
+                {"pos": [4078,9235],"shape": ["standard","Congé"],"shape_label": "Congé (R=0.4)","shape_params": {"rayon_conge": 400}},
+                {"pos": [4078,4035],"shape": ["standard","Congé"],"shape_label": "Congé (R=0.4)","shape_params": {"rayon_conge": 400}}
+            ],
+            "ref_vc": 18
+        },
+        "2": {
+            "nom": "Couteau intérieur",
+            "desc": "Outil d'alésage, tranchant cadran 1",
+            "points": [[15, 0], [0, 0], [5, 10], [15, 10]],
+            "pnt_ref": 1,
+            "cadran": 1
+        },
+        "3": {
+            "nom": "Couteau extérieur",
+            "desc": "Couteau droit, tranchant cadran 4",
+            "points": [[-20, 0], [0, 0], [5, 10], [-20, 10]],
+            "radius": 0,
+            "pnt_ref": 1,
+            "cadran": 4,
+            "ref_vc": 18
+        },
+        "11": {
+            "nom": "CCMT?9",
+            "desc": "Plaquette ébauche hasard",
+            "radius": 400,
+            "ref_dir":[3678,8835],
+            "points": [
+                {"pos": [-400,-400],"shape": ["standard","Congé"],"shape_label": "Congé (R=0.4)","shape_params": {"rayon_conge": 400}},
+                {"pos": [-400,4235],"shape": ["standard","Congé"],"shape_label": "Congé (R=0.4)","shape_params": {"rayon_conge": 400}},
+                {"pos": [4078,9235],"shape": ["standard","Congé"],"shape_label": "Congé (R=0.4)","shape_params": {"rayon_conge": 400}},
+                {"pos": [4078,4035],"shape": ["standard","Congé"],"shape_label": "Congé (R=0.4)","shape_params": {"rayon_conge": 400}}
+            ],
+            "ref_vc": 18
+        },
+        "12": {
+            "nom": "CCMT06",
+            "desc": "Plaquette ébauche 5°",
+            "points": [[0.000, 0.000], [0.562, 6.423], [6.985, 6.985], [6.423, 0.562]],
+            "pnt_ref": 0,
+            "cadran": 4
+        },
+        "13": {
+            "nom": "DCMT07",
+            "desc": "Plaquette 55°",
+            "points": [[0.000, 0.000], [-2.331, 7.393], [-9.724, 9.724], [-7.393, 2.331]],
+            "pnt_ref": 0,
+            "cadran": 4
+        }
+    },
+
+    "cutt_tool": {
+        "1": {
+            "id": 1,
+            "p_change": false,
+            "tool_mount": 3,
+            "form": 13,
+            "cadran": 4,
+            "dir_pos":[3678,8835],
+            "probe_x": 2340,
+            "probe_z": 5670,
+            "corr_x": [125010, 0],
+            "corr_z": [123025, 10]
+        },
+        "2": {
+            "id": 2,
+            "p_change": false,
+            "tool_mount": null,
+            "form": 12,
+            "radius": 400,
+            "probe_x": 2120,
+            "probe_z": 5650,
+            "corr_x": [109095, -5],
+            "corr_z": [123010, 0],
+            "ref_vc": 18
+        },
+        "4": {
+            "id": 4,
+            "p_change": true,
+            "tool_mount": 1,
+            "form": 2,
+            "radius": 40,
+            "probe_x": 250,
+            "probe_z": 580,
+            "corr_x": [130005, 35],
+            "corr_z": [130765, 0],
+            "ref_vc": 20
+        }
+    }
+}

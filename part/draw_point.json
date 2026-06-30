@@ -1,0 +1,76 @@
+{
+    "parts": 
+    [
+        {
+            "name": "Pièce A",
+            "points": [
+                {"pos": [-30000,0],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [-30000,4000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [0,4000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [0,10000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [-30000,10000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [-35000,0],"shape": null,"shape_label": null,"shape_params": {}}
+            ]
+        },
+        {
+            "name": "Pièce B",
+            "points": [
+                {"pos": [-55000,-27500],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [0,0],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.4)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 400,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "B-A","ref_appuis": "axis"}},
+                {"pos": [-22782,55000],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"symetry": [0,false],"largeur_a": [2000,false]}},
+                {"pos": [20000,20000],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"largeur_a": [3000,false],"largeur_c": [2000,false],"angle_a": [40000,false]}},
+                {"pos": [0,0],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"hauteur_b": [8000,false],"symetry": [0,false]}},
+                {"pos": [-20000,200000],"shape": ["standard","Congé"],"shape_label": "Congé (R=6.0)","shape_params": {"rayon_conge": 6000}},
+                {"pos": [100000,200000],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"largeur_a": [2000,false],"largeur_c": [2000,false]}},
+                {"pos": [100000,300000],"shape": ["rond","Congé"],"shape_label": "Congé (R=25.401)","shape_params": {"rayon_conge": 25401}},
+                {"pos": [180000,200000],"shape": null,"shape_label": null,"shape_params": {}}
+            ]
+        },
+        {
+            "name": "Pièce C",
+            "points": [
+                {"pos": [0,-30000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [13000,0],"shape": ["rond","Congé"],"shape_label": "Congé (R=2.0)","shape_params": {"rayon_conge": 2000}},
+                {"pos": [13000,-12000],"shape": ["rond","congé"],"shape_label": null,"shape_params": {"rayon_conge": 2000}},
+                {"pos": [15000,-15464],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"largeur_a": [2000,false],"largeur_c": [2000,false]},"params": {}},
+                {"pos": [13000,-18928],"shape": ["standard","Congé"],"shape_label": "Congé (R=0.5)","shape_params": {"rayon_conge": 500}},
+                {"pos": [50000,0],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [20000,0],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-1.0/4.5/R0.4)","shape_params": {"largeur": 4500,"profondeur": 500,"rayon_fond": 400,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "B-A","ref_appuis": "axis"}},
+                {"pos": [20000,60000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [0,-60000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [0,0],"shape": ["rond","congé_new"],"shape_label": "Congé (R=0.16)","shape_params": {"rayon_conge": 160}},
+                {"pos": [1000,-60000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [1000,0],"shape": ["rond","congé_new"],"shape_label": "Congé (R=30.0)","shape_params": {"rayon_conge": 30000}},
+                {"pos": [1200,60000],"shape": null,"shape_label": null,"shape_params": {}}
+            ]
+        },
+        {
+            "name": "Pièce D",
+            "points": [
+                {"pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [0,4000],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"symetry": [0,false],"hauteur_b": [1000,false]}},
+                {"pos": [-20000,4000],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.4/3.5/R1.2)","shape_params": {"largeur": 3500,"profondeur": 1700,"rayon_fond": 1200,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "axis","ref_appuis": "B-A"}},
+                {"pos": [-20000,15000],"shape": ["standard","congé"],"shape_label": "Congé (R=4.0)","shape_params": {"rayon_conge": 4000}},
+                {"pos": [-50000,15000],"shape": ["standard","congé"],"shape_label": "Congé (R=6.0)","shape_params": {"rayon_conge": 6000}},
+                {"pos": [-50000,4000],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.4/3.5/R1.2)","shape_params": {"largeur": 3500,"profondeur": 1700,"rayon_fond": 1200,"angle_entrer": 30000,"invert_dir": true,"ref_portee": "axis","ref_appuis": "B-A"}},
+                {"pos": [-70000,4000],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"largeur_a": [2000,false],"largeur_c": [2000,false]}},
+                {"pos": [-70000,0],"shape": null,"shape_label": null,"shape_params": {}}
+            ]
+        },
+        {
+            "name": "Pièce E",
+            "points": [
+                {"pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [0,4000],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"symetry": [0,false],"hauteur_b": [1000,false]}},
+                {"pos": [-20000,4000],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.4/3.5/R1.2)","shape_params": {"largeur": 3500,"profondeur": 1700,"rayon_fond": 1200,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "axis","ref_appuis": "B-A"}},
+                {"pos": [-20000,15000],"shape": ["standard","congé"],"shape_label": null,"shape_params": {"rayon_conge": 4000}},
+                {"pos": [-50000,15000],"shape": ["standard","congé"],"shape_label": "Congé (R=6.0)","shape_params": {"rayon_conge": 6000}},
+                {"pos": [-50000,4000],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.4/3.5/R1.2)","shape_params": {"largeur": 3500,"profondeur": 1700,"rayon_fond": 1200,"angle_entrer": 30000,"invert_dir": true,"ref_portee": "axis","ref_appuis": "B-A"}},
+                {"pos": [-70000,4000],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"largeur_a": [2000,false],"largeur_c": [2000,false]}},
+                {"pos": [-70000,0],"shape": null,"shape_label": null,"shape_params": {}}
+            ]
+        }
+    ],
+    "selected_part_index": 2
+}

@@ -1,0 +1,15 @@
+{
+    "INFORMATION": {
+        "message": "You need to add an object for each language you want to use.",
+        "ne_pas_supprimer": "missing_languages, c'est pour les langues manquantes ou corrompues"
+    },
+    "missing_languages": {
+        "testjhgfg": "Language 'testjhgfg' is missing or corrupted. Key: None"
+    },
+    "en": {
+        "dimensions": "key: dimensions : error_message: Key is missing or corrupted."
+    },
+    "fr": {        
+        "dro_intelligent_title": "key: dro_intelligent_title : error_message: Key is missing or corrupted."
+    }
+}

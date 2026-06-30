@@ -1,0 +1,2 @@
+class CutterManager():
+    pass

@@ -1,0 +1,298 @@
+# dro_viewer.kv à la racine du projet
+
+
+<AxisDim>:
+    BoxLayout:
+        orientation: "horizontal"
+        spacing: 0
+        padding: [0, 0,0,0]
+        
+        # (1) Nom de l’axe
+        HoverLabel:
+            id: btn_name
+            text: root.name_txt
+            size_hint_x: 0.5
+            font_size: "20sp"
+            halign: "center"
+            bg_color: 1, 1, 1, 0.0
+            hover_color: 0.3, 1, 0.3, 0.3
+            #on_click: root.label_clicked(self)
+        
+        # (2) Valeur numérique (formatée texte)
+        HoverLabel:
+            id: btn_value
+            text: root.value_txt
+            size_hint_x: 0.9
+            font_size: "32sp"
+            halign: "right"         # alignement horizontal
+            bg_color: 1, 1, 1, 0.0
+            hover_color: 0.3, 1, 0.3, 0.3
+            #on_release: app.open_axis_homing(root)
+            #on_press: root.label_clicked(self)
+        
+        # (3) Bloc vertical unité / diamètre
+        BoxLayout:
+            id: btn_config
+            orientation: "vertical"
+            size_hint_x: None
+            width: 50
+            spacing: 0
+
+            BoxLayout:  # LED + label diamètre
+                size_hint_y: 0.5
+                spacing: 2
+                canvas.before:
+                    Color:
+                        rgba: (0, 1, 0, 1) if root.val_diam else (1, 1, 1, 0.3)
+                    Ellipse:
+                        pos: self.x + 5, self.center_y - 10
+                        size: (14, 16)
+                Label:  # diamètre
+                    text: "  Ø" # if root.val_diam else "r "
+                    halign: "center"
+                    valign: "middle"
+                    text_size: self.size
+                    font_size: "14sp"
+                    color: (1, 1, 1, 1) if root.val_diam else (1, 1, 1, 0.4)
+                    size_hint_x: 1
+
+            MyLabel:  # unité
+                text: root.val_unit
+                font_size: "14sp"
+                halign: "left"
+                valign: "middle"
+
+<AxisYplus>:
+    BoxLayout:
+        orientation: "horizontal"
+        spacing: 30
+        padding: [10, 5]
+        
+        # (1) Nom de l’axe
+        HoverLabel:
+            id: btn_angle
+            text: "Angle"
+            size_hint_x: 0.7
+            font_size: "20sp"
+            halign: "center"
+            bg_color: 1, 1, 1, 0.0
+            hover_color: 0.3, 1, 0.3, 0.3
+            #on_click: root.label_clicked(self)
+        
+        # (2) Valeur numérique (formatée texte)
+        HoverLabel:
+            id: btn_valang
+            text: root.angle_txt
+            size_hint_x: 1
+            font_size: "26sp"
+            halign: "right"         # alignement horizontal
+            bg_color: 1, 1, 1, 0.0
+            hover_color: 0.3, 1, 0.3, 0.3
+            #on_release: app.open_axis_homing(root)
+            #on_press: root.label_clicked(self)
+
+# devient OBSOLETTE : à supprimer
+<AxisFrame>:
+    canvas.before:
+        # Fond
+        Color:
+            rgba:
+                (0, 1, 0, 0.15) if root.status > 0 else \
+                (1, 0, 0, 0.3) if root.status < 0 else \
+                (0.4, 0.4, 0.4, 0.1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [15,]
+
+        # Bordure
+        Color:
+            rgba: 1, 1, 1, 0.6  # couleur du contour
+        Line:
+            rounded_rectangle: (self.x, self.y, self.width, self.height, 15)
+            width: 2
+<HeaderAxis>:
+    size_hint_y: None
+    height: 80
+<DroAxis>:
+    size_hint_y: None
+    height: 90
+<DroYAxis>:
+    size_hint_y: None
+    height: 90
+# Fin de à supprimer
+
+
+<DroHeader>:
+    orientation: "horizontal"
+    size_hint_y: None
+    height: 120
+    spacing: 20
+    padding: [15, 18, 15, 20]
+    canvas.before:
+        Color:
+            rgba: 0.2, 0.2, 0.3, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    AxisBox:    # Diamètre total (X + Y)
+        id: header_vert
+        axe_ident: "vert3"
+    AxisBox:    # Profondeur total (Z + Y)
+        id: header_hor
+        axe_ident: "hor3"
+    AxisBox:    # Y
+        id: header_sup
+        axe_ident: "sup"
+
+<DroToolBar>:
+    orientation: "vertical"
+    size_hint_y: 1
+    size_hint_x: None
+    width: 180
+    #orientation: "horizontal"
+    #size_hint_y: None
+    #size_hint_x: 1
+    #height: 120
+    canvas.before:
+        Color:
+            rgba: 0.15, 0.25, 0.15, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    Label:
+        text: "⚙️ Menu"
+    Label:
+        text: "📐 Réglages"
+    Button:
+        text: "📐 Réglages"
+    Label:
+        text: "🧰 Outils"
+    Label:
+        text: "📈 Graph"
+
+<DroDro>:
+    orientation: "horizontal"
+    spacing: 10
+
+    # Gauche : axes
+    BoxLayout:
+        id: dro_dim
+        orientation: "vertical"
+        size_hint_y: 1
+        padding: 0,30
+        spacing: 0
+        canvas.before:
+            Color:
+                rgba: 1, 0.1, 0.3, 0.4
+            Rectangle:
+                pos: self.pos
+                size: self.width, self.height
+
+        BoxLayout:
+            id: dro_axes_l1
+            orientation: "horizontal"
+            size_hint_x: None
+            size_hint_x: 1
+            size_hint_y: None
+            height: 110
+            spacing: 30
+            padding: [10, 20] # → marge horizontale / verticale
+
+            AxisBox:    # X
+                id: dro_x
+                axe_ident: "vert"
+                size_hint_x: 1
+                #name_txt: "X"
+
+            AxisBox:    # Z
+                id: dro_z
+                axe_ident: "hor"
+                size_hint_x: 1
+
+        BoxLayout:
+            id: dro_axes_l2
+            orientation: "horizontal"
+            size_hint_y: None
+            height: 110
+            size_hint_x: 1
+            spacing: 30
+            padding: [10, 20] # → marge horizontale / verticale
+
+            AxisBox:    # Y + complément
+                id: dro_y
+                axe_ident: "sup"
+                special: "Yplus"
+                size_hint_x: 1
+
+        BoxLayout:
+            id: dro_axes_l3
+            orientation: "horizontal"
+            size_hint_y: None
+            height: 110
+            size_hint_x: 1
+            spacing: 30
+            padding: [10, 20] # → marge horizontale / verticale
+
+            AxisBox:    # S + complément
+                id: dro_s
+                axe_ident: "s"
+                #special: "Splus"
+                size_hint_x: 1
+
+            AxisBox:    # r (complément à voir ?)
+                id: dro_r
+                axe_ident: "r"
+                size_hint_x: 1
+
+    # Droite : informations diverses
+    BoxLayout:
+        id: dro_compl
+        orientation: "vertical"
+        size_hint_y: 1
+        size_hint_x: 0.4
+        canvas.before:
+            Color:
+                rgba: 0.1, 0.1, 0.3, 1
+            Rectangle:
+                pos: self.pos
+                size: self.width, self.height
+
+        Label:
+            text: "DRO principale"
+            font_size: "20sp"
+            
+        Label:
+            text: "🔧 Outil : P25"
+        Label:
+            text: "🧮 Macro : En attente"
+        Label:
+            text: "📝 Log : OK"
+
+<DroGraph>:
+    canvas.before:
+        Color:
+            rgba: 0.05, 0.05, 0.1, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+<DroManager>:
+    orientation: "vertical"
+    #orientation: "horizontal"
+    DroHeader:
+        id: header_box
+    BoxLayout:
+        orientation: "horizontal"
+        DroToolBar:
+            id: bartool_box
+
+        BoxLayout:
+            orientation: "vertical"
+            DroDro:
+                id: dro_box
+                size_hint_y: 1
+            DroGraph:
+                id: graph_box
+                size_hint_y: 2

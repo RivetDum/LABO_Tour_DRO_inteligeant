@@ -1,0 +1,12 @@
+{
+    "INFORMATION": {
+        "message": "You need to add an object for each language you want to use.",
+        "ne_pas_supprimer": "missing_languages, c'est pour les langues manquantes ou corrompues"
+    },
+    "missing_languages": {
+    },
+    "en": {
+    },
+    "fr": {
+    }
+}
