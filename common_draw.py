@@ -1402,6 +1402,134 @@ def create_fillet(point_before, point_intersect, point_after, radius, list_forma
         "cw": cw}
 
 # Mise en forme des segments pour ProfilPièce()
+def create_entities_for_proofil(raw_list, reverse=False, default_color=None, error_color=None, id_pnt=None):
+    """
+    Spécialiste DRO : Uniformise le profil complet avec une couleur par défaut (ex: vert ou rouge foncé)
+    et une couleur d'erreur (ex: rouge vif), tout en conservant 'origin_color' intact pour les fonctions
+    inverses de reconstruction de listes de points.
+
+    Args:
+        raw_list (list): Liste de dict des définitions brutes.
+        reverse (bool): Si True, inverse l'ordre et le sens des entités.
+        default_color: Couleur unifiée à utiliser si le segment est valide.
+        error_color: Couleur à utiliser en cas d'erreur détectée (produit scalaire ou flag).
+        id_pnt: Identifiant par défaut à insérer.
+
+    Returns:
+        list: Liste d'entités prêtes à dessiner uniformément.
+    """
+    entities = []
+    raw = None
+    error = False
+    
+    # Sécurisation des couleurs au format RGBA Kivy
+    error_color = normalize_color(error_color or (1, 0, 0, 1))         # Rouge vif par défaut
+    default_color = normalize_color(default_color or (0, 1, 0.5, 1))   # Vert fluo par défaut
+    ERROR_MARKER = "#error"
+
+    # Calcul du point de départ selon le sens de parcours
+    last_end = None
+    if not reverse:
+        for _raw in raw_list:
+            if "start" in _raw:
+                last_end = _raw["start"]
+                break
+    else:
+        for idx in range(len(raw_list)-1, -1, -1):
+            _raw = raw_list[idx]
+            if "end" in _raw:
+                last_end = _raw["end"]
+                break
+
+    def compute_raw(idx_raw):
+        nonlocal raw, last_end, error, error_color, default_color, id_pnt
+        ent_type = raw["type"]
+
+        # Extraction de la couleur d'origine pour sécuriser la fonction inverse
+        origin_color = raw.get("color", None)
+        ident = raw.get("id_pnt", id_pnt)
+
+        # Gestion des flags d'erreurs
+        if "error" in raw and raw["error"]:
+            error = True
+            color = ERROR_MARKER
+
+        # Détermination de la couleur uniforme d'affichage
+        if error or origin_color == ERROR_MARKER:
+            error = False if origin_color != ERROR_MARKER else True
+            color = error_color
+        else:
+            color = default_color
+
+        # --- Création des entités géométriques ---
+        if ent_type == "l":  # Droite de connexion dépendante
+            ref_point = None    
+            if not reverse:
+                start, end = raw["start"], raw["end"]
+                for _raw in raw_list[idx_raw + 1:]:
+                    if "start" in _raw:
+                        ref_point = _raw["start"]
+                        break
+                next_start = ref_point or end
+            else:
+                start, end = raw["end"], raw["start"]
+                for idx in range(idx_raw - 1, -1, -1):
+                    _raw = raw_list[idx]
+                    if "end" in _raw:
+                        ref_point = _raw["end"]
+                        break
+                next_start = ref_point or end
+
+            if next_start is not None:
+                dx1, dy1 = end[0] - start[0], end[1] - start[1]
+                dx2, dy2 = next_start[0] - last_end[0], next_start[1] - last_end[1]
+                
+                # Produit scalaire de sécurité pour détecter les inversions
+                dot_product = dx1 * dx2 + dy1 * dy2
+                if dot_product < 0:
+                    color = error_color
+                    error = True
+                    if entities:
+                        entities[-1]["color"] = error_color
+
+                # AJOUT : On passe bien 'color' pour la DRO et 'origin_color' pour la mémoire inverse
+                entities.append(creat_entry_line(last_end, next_start, color, origin_color, ident))
+
+        elif ent_type == "d":  # Droite autonome
+            start, end = (raw["end"], raw["start"]) if reverse else (raw["start"], raw["end"])
+            if start != end:
+                entities.append(creat_entry_line(start, end, color, origin_color, ident))
+
+        elif ent_type == "a":  # Arc de cercle
+            start, end = (raw["end"], raw["start"]) if reverse else (raw["start"], raw["end"])
+            center, radius, cw = raw["center"], raw["radius"], raw["dir"] if not reverse else not raw["dir"]
+            if radius != 0:
+                entities.append(creat_entry_arc(start, end, center, radius, cw, color, origin_color, ident))
+            else:
+                end = last_end  # Arc fictif
+                if not cw:
+                    error = True
+
+        elif ent_type == "c":  # Cercle complet
+            center, radius = raw["center"], raw["radius"]
+            end = last_end  # Ne modifie pas last_end
+            if radius != 0:
+                entities.append(creat_entry_circle(center, radius, color, origin_color, ident))
+
+        else:
+            print(f"[WARN] Type inconnu dans la DRO : {ent_type}")
+            end = last_end
+
+        return end
+
+    # Parcours principal de la liste brute
+    len_list = len(raw_list)
+    for idx in range(len_list):
+        index = idx if not reverse else (len_list - 1 - idx)
+        raw = raw_list[index]
+        last_end = compute_raw(index)
+
+    return entities
 def create_entities_from_raw(raw_list, reverse=False, error_color=None, id_pnt=None):
     """ create_entities_from_raw(raw_list, reverse=False)
     Crée une liste d'entités formatées (ligne, arc, cercle) à partir d'une liste brute,

@@ -338,7 +338,66 @@ class DroHeader(BoxLayout):
 
 class DroToolBar(BoxLayout): pass
 class DroDro(BoxLayout): pass
-class DroGraph(BoxLayout): pass
+class DroGraph(BoxLayout):pass
+class DroGraph(BoxLayout):
+    """
+    ========================================================================
+    🛠️ FEUILLE DE ROUTE : LOGIQUE DE FONCTIONNEMENT DU GRAPHIQUE DRO (À FAIRE)
+    ========================================================================
+    
+    1. LE MOTEUR GRAPHIQUE (Toile blanche) :
+       Utiliser notre classe 'cd.ProfilPiece(Widget)' comme instance indépendante 
+       dédiée à l'écran DRO. En tant que Widget pur, elle nous donne un accès direct 
+       au canvas de la carte graphique pour un tracé instantané à 60Hz sans lag.
+       >> Ps: modifier cette class pour quel accepte : (contrôler ce qui existe déjà !)
+        - des offsets (jusqu'au point 0,0 (sans scale) et la position machine(avec scale))
+        - l'échelle (scale)
+        - une deuxième liste de segments et l'épaisseur de trait pour chaque liste (voir une troisième si l'on compte le dessin du burin !)
+       >> ne pas oublier que cette class sert aussi ailleur (dessin de détail pour les Shapes), donc adapté le reste des appels!
+       
+    2. LE PRÉPARATEUR DE SÉGMENTS (Uniformisation) :
+       Utiliser notre fonction dédiée 'cd.create_entities_for_profil' pour mouliner 
+       nos listes brutes. Elle ignore les couleurs de surbrillance locale du pop-up 
+       pour uniformiser tout le profil, tout en conservant 'origin_color' intacte.
+
+    3. LE CONTENEUR DE SÉCURITÉ (Fichier .kv) :
+       Remplacer le 'BoxLayout' actuel par un 'StencilView' directement dans le .kv.
+       Cela servira de masque de découpage pour couper proprement tout le dessin 
+       qui déborde de notre cadre bleu nuit lors des déplacements des axes du tour.
+       
+    4. LES VARIABLES D'ANIMATION (__init__) :
+       Déclarer dans le constructeur nos manettes de contrôle :
+       - self.scale = 2.5        # Échelle/Zoom de départ (pixels par mm)
+       - self.offset_base_x = 0  # Décalage X à la souris (Glisser-Déposer)
+       - self.offset_base_y = 0  # Décalage Y à la souris
+       
+    5. LE REPÈRE DE CONSTRUCTION (Le secret mathématique) :
+       Fixer l'origine absolue (X=0, Y=0) PILE sur la pointe de notre burin (l'outil).
+       - Le burin reste fixe au point d'ancrage de la boîte + l'offset de la souris.
+       - La pièce tourne et se déplace autour de ce point 0,0 en fonction des axes.
+       
+    6. LA FORMULE MATHÉMATIQUE ULTRA-OPTIMISÉE (Avant la boucle de dessin) :
+       Pour éviter les calculs répétitifs à chaque déplacement, on regroupe les 
+       offsets constants AVANT de passer en revue la liste de points :
+       
+       Pixel_X = Position_Boite_X + Offset_Base_X_pixels + (Machine_X + Piece_X) * scale
+       
+    7. LE DOUBLE TRAIT COMPARAISON (Usinage vs Dessin) :
+       Pour voir les modifications en direct sans polluer l'écran, on dessine DEUX FOIS :
+       - COUCHE 1 (Dessous) : Appel de 'create_entities_for_dro' sur la liste machine.
+         Couleur rouge foncé, épaisseur large (width=2.5).
+       - COUCHE 2 (Dessus) : Appel de 'create_entities_for_dro' sur la liste dessin.
+         Couleur verte, épaisseur plus fine (width=1.5).
+         
+       Résultat : Si c'est identique, le vert cache le rouge (ligne verte liseré rouge).
+       Si c'est différent (ex: gorge modifiée), l'ancien profil réapparaît en rouge vif !
+       
+    8. BOUTON RECENTRE :
+       Si le dessin sort de l'écran, reset l'offset de base au centre de la boîte.
+    ========================================================================
+    """
+    pass
+
 
 class DroManager(BoxLayout):
     def __init__(self,part, cutter, machine, **kwargs):

@@ -60,6 +60,7 @@ Ce projet est une application Kivy permettant la création de dessins techniques
     │ ├── draw_data.py          # Modèle : données de base et logique métier
     │ ├─v draw_pnt_manager.py   # Gestion des coordonées de dessin et du fichier de sauvegarde (draw_point.json)
     │ ├─^ draw_point.json       # Fichier de sauvegarde (liste de points, segments)
+    │ ├── profil_machine_actif.json # Save profile à usiner partagé avec la machine (voir reel_time/machine_mcu.py)
     │ ├── draw_form.py          # Vue principale pour l’affichage graphique
     │ ├── __init__.py           # Initialise le package part
     │ ├── draw_tool/            # Outils annexes (fenêtres modales, etc.)
@@ -88,7 +89,7 @@ Ce projet est une application Kivy permettant la création de dessins techniques
     .... Uniquement pour test ou debugage ....
     ├── main_temp.py             # lanceur pour tester draw_data
 
-    /dro_viewer/
+    |   /dro_viewer/
     │
     ├── dro_viewer.py            # Layout principal + gestion globale
     ├── dro_viewer.kv
@@ -98,9 +99,18 @@ Ce projet est une application Kivy permettant la création de dessins techniques
     │   ├── dro_cutter.py      # 🏗️ outils / ofsset / état
     │   ├── dro_machine.py      # 🏗️ machine / homing / état
     │   ├── dro_user.py         # 👤 profil utilisateur, préférences
-    │   ├── dro_comm.py         # 🔌 communication MCU / port série
+    │   ├── dro_comm.py         # 🔌 communication MCU / port série ==> ?? A remplacer par reel_time/machine_mcu.py ??
     │   └── dro_drawing.py      # 🧭 affichage, points, graph, etc.
     │
+    │
+    ├── machine_tool/
+    │   ├─v machine_data.py     # gère la configuration des MCU machine
+    │   └─^ TODO: json de sauvegarde à faire
+    |
+    ├── reel_time/              # gestion de communication haut débit
+    │   └── machine_mcu.py      # gestion de la communiquation entre la machine (mcu = ESP32-S3) et ce logiciel
+    |
+    | 
     └── __init__.py
 
 ## ▶️ Lancer l’application
