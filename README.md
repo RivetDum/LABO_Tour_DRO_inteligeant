@@ -15,7 +15,7 @@ Ce projet est une application Kivy permettant la création de dessins techniques
         - val_base() → retourne un int (ex. en µm : 10000)
             → Valeur en unité de base (unité fixe)
         - val_work() → retourne un float (ex. en mm : 10.0)
-            → Valeur en unité utilisateur (machine)
+            → Valeur en unité utilisateur (machine) (pour un tour par ex, on est toujours au rayon)
         - val_disp() → retourne un str (ex. "20.00 mm")
             → Valeur en unité affichée à l’écran (facteur visuel inclus, ex. diamètre)
 
@@ -35,7 +35,9 @@ Ce projet est une application Kivy permettant la création de dessins techniques
     ├── i18n/               # Dictionnaire de traduction pour l'interface ("A mettre en place")
     │   ├── fr.json
     │   ├── en.json
-    │   └── __init__.py   ← avec une fonction globale `tr("key")`
+    │   ├── ... TODO: A competter
+    │   └── __init__.py   ← avec fonction globale `tr("key") , Tr("key") , TR("key")`
+    |    info>> tr: comme dans le dictionnaire ; Tr: avec le premier caractère majuscule ; TR: tous en majuscules
     |
     ├── table/              # Dossier pour tabels informatives
     │   ├── tolerance/          # Dossier pour tables de tolérances
@@ -77,26 +79,25 @@ Ce projet est une application Kivy permettant la création de dessins techniques
     │   ├── round_corner2.py        ← classe `RoundedCornerShapeNew`
     │   ├── chamfer.py              ← classe `ChamferShape`
     │   ├── thread_relief_iso.py    ← classe `gorge de filatge ISO`
-//    │   └── plugin_loader.py        ← plus tard, pour charger des plugins externes
+    │ //  └── plugin_loader.py        ← plus tard, pour charger des plugins externes
     │
     ├── cutting_tool/       # Modules fonctionnels liés au dessin du burin
-    │   ├─v TurnCut.py          # Editeur d'outils de coupe
-    │   ├─v Insert.py           // classe de la plaquette
-    │   ├─^ tool_lib.json       # Fichier de sauvegarde (librairie d'outils)
-    │   └── __init__.py           # Initialise le package tool: TurnCut
-//    │   ├── insert/
+    │   ├─v TurnCut.py              # Editeur d'outils de coupe
+    │   ├─v Insert.py               // classe de la plaquette
+    │   ├─^ tool_lib.json           # Fichier de sauvegarde (librairie d'outils)
+    │   └── __init__.py             # Initialise le package tool: TurnCut
+    │  // ├── insert/
     |
-    .... Uniquement pour test ou debugage ....
+    | .... Uniquement pour test ou debugage ....
     ├── main_temp.py             # lanceur pour tester draw_data
-
-    |   /dro_viewer/
-    │
+    |
+    │ /dro_viewer/
     ├── dro_viewer.py            # Layout principal + gestion globale
     ├── dro_viewer.kv
     │
     ├── dro_tool/
     │   ├── dro_axis.py         # ⚙️ popups / outils liés aux axes
-    │   ├── dro_cutter.py      # 🏗️ outils / ofsset / état
+    │   ├── dro_cutter.py       # 🏗️ outils / ofsset / état
     │   ├── dro_machine.py      # 🏗️ machine / homing / état
     │   ├── dro_user.py         # 👤 profil utilisateur, préférences
     │   ├── dro_comm.py         # 🔌 communication MCU / port série ==> ?? A remplacer par reel_time/machine_mcu.py ??

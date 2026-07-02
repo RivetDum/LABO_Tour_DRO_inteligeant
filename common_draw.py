@@ -34,7 +34,9 @@ class ProfilPiece(Widget):
     """
     _auto_update_enabled = True  # Par défaut, activé
 
-    def __init__(self, entities=None, box_size= None, conect_line=False, mirror_vert=True, mirror_hor=False, **kwargs):
+    #def __init__(self, entities=None, box_size= None, conect_line=False, mirror_vert=True, mirror_hor=False, **kwargs):
+    # devindra :
+    def __init__(self, entities=None, box_size= None, conect_line=False, mirror_vert=True, mirror_hor=False, multi_entities=None, **kwargs):
         ''' Note : hor_raw → x_kivy (horizontal) , vert_raw → y_kivy (vertical) '''
         super().__init__(**kwargs)
 
@@ -48,6 +50,7 @@ class ProfilPiece(Widget):
         self.mirror_hor = mirror_hor  # Miroir sur l'axe Horizontal
 
         # Initialisation des variable pour les màj-automatiques de taille
+        self.multi = False if multi_entities is None else True  # format de travail simple-multi entities
         self._need_resize = False
         self._need_reposition = False
         self._update_scheduled = False
@@ -58,7 +61,23 @@ class ProfilPiece(Widget):
         self.min_hor = self.min_vert = float('inf')
         self.max_hor = self.max_vert = float('-inf')
         self.pos_to_box = [0,0] # position de ce widget dans la box qui reçoit le dessin (décallage à appliquer au dessin)
+
+
+        # variables de comparaisons pour le multi_entities
+        self.machine_offset_scale = [0.0, 0.0]
+        self.last_scale = self.scale
+        self.last_offset_pnt0 = self.extra_offset.copy()  # .copy() évite que les deux listes soient soudées en mémoire !
+        self.last_tool_offset = 0
+        # format d'entity dans les liste ci-dessous: voir creat_entry_... arc, line, ...
+        self.part_entities = []       # valeur déjà décalée de last_offset_pnt0 et déjà à l'échelle, reste juste à ajouter machine_offset_scale
+        self.draw_entities = []       # valeur déjà décalée de last_offset_pnt0 et déjà à l'échelle, reste juste à ajouter machine_offset_scale
+        self.offsettool_entities = {"radius": 0, "color": (1.0, 0.85, 0.73, 0.9), "pos": [0,0]} # variables pour dessiner le cercle d'offset (peut-être màj sans tous recalculer!)
+        self.tool_entities = []       # valeur déjà décalée de last_offset_pnt0 et déjà à l'échelle
+        self.last_box_size = box_size
+        self.last_pos_to_box = [0, 0]
+
         self.trigger_changsize(self.box_size)
+
 
     def update_entities(self, entities):       
         """
@@ -203,7 +222,6 @@ class ProfilPiece(Widget):
                                             bbox_end[0], bbox_end[1], bbox_end[0], bbox_start[1], 
                                             bbox_start[0], bbox_start[1]], width=1, close=True, color=(1, 0, 0, 0.5))
                     #self.raw_entities.append(bbox_rect)'''
-
 
     def trigger_changsize(self, box_size=None, entities=None, conect_line=None, search_min_max=True):
         if entities is not None:
@@ -457,9 +475,9 @@ class ProfilPiece(Widget):
         self.trigger_redraw()
 
     '''
-    Si-dessous: Des fonctions qui diffèrent de 4 millis, les actions liés à la boxe contenant le dessin :
-        - déplacements de la boxe.      -> demande de dessiner à nouveau la pièce dans le canvas
-        - redimentionnement de la boxe. -> demande d'adapter l'échelle du dessin, avant de re-dessiner la pièce dans le canvas aux nouvelles dimentions
+    Si-dessous: Des fonctions qui diffèrent de 4 millis, les actions liés à la box contenant le dessin :
+        - déplacements de la box.      -> demande de dessiner à nouveau la pièce dans le canvas
+        - redimentionnement de la box. -> demande d'adapter l'échelle du dessin, avant de re-dessiner la pièce dans le canvas aux nouvelles dimentions
     - Pourquoi ces 4 millis ? Pour éviter une collisiton des fonctions et de surcharger le logiciel inutillement tout en gardant un affichage très réactif
     '''
     def on_size_changed(self, new_size=None):
@@ -502,6 +520,765 @@ class ProfilPiece(Widget):
         """
         self._auto_update_enabled = auto_update_enabled
 
+# Remplassante de ProfilPiec()
+class ProfilCanvas(Widget):
+    """
+    ⚙️ VOS INFOS DE REPRISE (À garder sous le coude) :
+
+        1. LE CONSTRUCTEUR UNIVERSEL (__init__)
+        -> Accepte : entities_dessin, entities_machine, scale=None (si None -> zoom auto)
+        -> Initialise vos variables de comparaison : self.last_scale, self.last_box_size
+        -> S'adapte au Pop-up (1 liste) ET à la DRO (2 calques superposés) sans rien casser.
+
+        2. L'ALGORITHME ANTI-LAG (60Hz)
+        -> Étape Statique (Au repos / Si zoom change) :
+            pt.pixel_fixe = Position_Boite + (pt_millimetres * scale) + offset_souris
+        -> Étape Dynamique (En usinage à 60Hz) :
+            regle_pixel = position_regle_machine * scale
+            pixel_final = pt.pixel_fixe + regle_pixel (Une seule addition !)
+
+        3. LES OPTIONS VISUELLES D'ATELIER
+        -> Option "Filet" (Line) vs "Remplir" (Ellipse/Mesh pour le burin et la passe).
+        -> Opacité (Alpha) : Utilisation du 4ème chiffre RGBA pour le halo de passe transparent.
+        -> Flag de comparaison : Si len(liste1) != len(liste2), le fond d'écran passe du bleu nuit au rouge alerte.
+
+            """
+    """ (docstring de classe)
+        Widget personnalisé pour dessiner des entités géométriques (lignes et arcs)
+        à l'intérieur d'une boîte de dessin. Gère le redimensionnement semi-automatique
+        et la mise à l'échelle selon la taille du widget parent (si transmise).
+
+        Attributs :
+        - entities : liste d'entités brutes à dessiner (non mises à l'échelle).
+        - box_size : taille de la boîte cible (facultatif, sinon pas de mise à l'échelle).
+        - scale : facteur d'échelle calculé automatiquement.
+        - offset_vert / offset_y : décalage appliqué pour centrer le dessin.
+        - raw_entities : liste des objets graphiques ajoutés au canvas.
+
+        Méthodes principales :
+        - update_entities() : mettre à jour les entités à dessiner.
+        - update_size_entities() : mettre à jour les entités et redimensionner.
+        - no_scale() : désactive l'échelle (dessin brut).
+        - trigger_redraw() : force un redessin.
+        - trigger_changsize() : recalcule échelle et offset, puis redessine.
+    """
+    _auto_update_enabled = True  # Par défaut, activé
+
+    def __init__(self, box, offset_pos=[0, 0], offset_move=None, scale=None, mirror_vert=True, mirror_hor=False, conect_line=False,
+                 A_entities=None, A_outline_width=1.5, A_fill_color=None,
+                 B_entities_machine=None, B_outline_width=2.5, B_fill_color=None, 
+                 **kwargs):
+        super().__init__(**kwargs)
+
+        # ==========================================================
+        # CONFIGURATION GÉNÉRALE 1ère partie
+        # ==========================================================
+        self.box_dest = box            # Lien vers la boîte de l'écran pour calculer sa taille et sa position
+        self.mirror_vert = mirror_vert  # TODO:à mettre en place. Utiliser un mirroir vertical pour le dessin (et les offset ?)
+        self.mirror_hor = mirror_hor    # TODO:à mettre en place. Utiliser un mirroir horizontal pour le dessin (et les offset ?)        
+        # C'est devenu une fonction momentané qui ajuste scale ==>self.auto_scale = True if scale is None else False  # Utiliser le zoom automatique en fonction de la taille de la box
+        self.scale = scale if (scale is not None and scale > 0) else 1.0    # ne jamais passer scale à 0 !!     Échelle graphique du dessin en[Px/µm]
+        self.scale_def = self.scale     # TODO: devra être importée depuis les paramètres ==> Échelle par défaut en[Px/µm]
+        self.connect_line = conect_line                     # Utiliser le premier et dernier segment pour calculer le zoom automatique
+ 
+        self.offset_base = offset_pos or [0,0] # TODO: devra être importée depuis les paramètres ==> Offset visuel de base EN RATIO de la taille de l'écran, définit le pnt0,0 de référance
+        #self.offset_add_ratio = False   # True : self.offset_add = ratio de boxe_size / False : self.offset_add = valeurs en pixels    
+        self.offset_screen = [0,0]       # Offset représantant les déplacement à la sourie de l'opérateur (en pixel)
+        self.offset_move = offset_move or [0,0]  # offset représantant les mouvement des axes machine (en um , multiplier par zoom avant l'emplois)
+        box_x = self.box_dest.pos[0] if hasattr(self.box_dest, 'pos') else 0   # Position absolue en "X" du boxLayout reçu en lien
+        box_y = self.box_dest.pos[1] if hasattr(self.box_dest, 'pos') else 0
+        base_pixelx, base_pixely = self.offset_ratio_to_pixel(self.offset_base) #TODO: fonction à écrire
+        self.offset_0 = [box_x + base_pixelx + self.offset_screen[0], box_y + base_pixely + self.offset_screen[1]] # position absolue de la coordonnée 0,0 pour notre dessin
+        #self.offset_0_def = self.offset_0.copy() # Valeur de réinitialisation. Info: .copy() pour isoler la liste en mémoire
+        # ci-dessous vient inutile, quand self.offset_move == [0.0, 0.0] on ne l'utilise pas autrement oui !
+        #self.up_move = True if offset_move is not None else False   # doit-on prévoire des déplacement sans recalcul (juste ajouter les déplacement des axes de la machine par ex.)
+        #if self.up_move:
+        #    self.offset_move = [offset_move[0] * self.scale, offset_move[1] * self.scale]   # offset représantant les mouvement des axes machine, mise à l'échelle
+        #else:
+        #    self.offset_move = [0.0, 0.0]
+
+        # ==========================================================
+        # CONFIGURATION LISTE 1 : LE DESSIN ACTUEL (Pièce)
+        # ==========================================================
+        self.a_entities = A_entities or []          # Liste des segments bruts (sans échelle)
+        self.a_segments = []                        # Liste des segments précalculés en pixels fixes
+        self.a_width = A_outline_width or 0         # Épaisseur du trait, si 0 -> pas de contour
+        self.a_fill_color = A_fill_color            # Couleur de remplissage (None -> pas de remplissage)
+
+        # ==========================================================
+        # CONFIGURATION LISTE 2 : LA MACHINE (Optionnelle)
+        # ==========================================================
+        self.b_entities = B_entities_machine or []  # Liste des segments bruts machine (sans échelle)
+        self.b_segments = []                        # Liste des segments précalculés en pixels fixes
+        self.b_width = B_outline_width or 0         # Épaisseur du trait large machine
+        self.b_fill_color = B_fill_color            # Couleur de remplissage machine (ex: None)
+
+        # ==========================================================
+        # CONFIGURATION GÉNÉRALE 2ème partie
+        # ==========================================================
+        # Vos variables d'historique anti-lag viendront se poser ici !
+        #self.last_scale = self.scale
+        #self.last_offset_0 = self.offset_0.copy()
+
+        self.trigger_changsize(self.box_dest)
+
+    def update_entities(self, entities, B_entities=None):       
+        """
+        Met à jour la/les listes des entités à dessiner sans modifier l'échelle.
+        """
+        recalc_a = recalc_b = False
+
+        if entities is not None:
+            self.a_entities = entities or []
+            recalc_a = True
+        if B_entities is not None:
+            self.b_entities = B_entities or []
+            recalc_b = True
+        
+        self.precalculer_profils_statiques(recalc_a, recalc_b)
+        self.trigger_redraw() 
+ 
+    def update_size_entities(self, box_dest=None, entities=None, B_entities=None):
+        """
+        Gère le changement de géométrie et/ou le redimensionnement de la box.
+        """
+        recalc_a = recalc_b = False
+
+
+        # On recalcule systématiquement offset_0 à partir de l'objet de destination actuel
+        if box_dest is not None:  # si box_dest reçu n'est pas None (un lien vers un BoxLayout, mais aussi True, ...) on force une màj
+            # Sécurité : On vérifie strictment si c'est un objet de type BoxLayout
+            if box_dest and isinstance(box_dest, BoxLayout):
+                self.box_dest = box_dest
+            base_pixelx, base_pixely = self.offset_ratio_to_pixel(self.offset_base)
+            pos_x = self.box_dest.pos[0] if hasattr(self.box_dest, 'pos') else 0
+            pos_y = self.box_dest.pos[1] if hasattr(self.box_dest, 'pos') else 0
+            self.offset_0 = [pos_x + base_pixelx + self.offset_screen[0], pos_y + base_pixely + self.offset_screen[1]]
+            recalc_a = recalc_b = True  # .offset_0 à changé, on doit refaire le pré-calcul statique des 2 listes de segments
+
+        if entities is not None:
+            self.a_entities = entities or []
+            recalc_a = True
+        if B_entities is not None:
+            self.b_entities = B_entities or []
+            recalc_b = True
+        
+        self.precalculer_profils_statiques(recalc_a, recalc_b)
+        self.trigger_redraw()    # DESSIN : On force Kivy à effacer la toile et à tout repeindre
+
+    def update_offset(self, offset_screen=None, offset_base=None, not_calc_new=False):
+        """
+        Modification des offsets de positionnement (Souris [Px] ou Ratio point_zéro).
+        arg:
+            - offset_screen : c'est les déplacement du dessin par l'opérateur en[pixel] . (glisser à la souris)
+            - offset_base   : c'est le placement de la référence par défaut en[ratio de la fenêtre]) .
+            - not_calc_new  : À utiliser uniquement si une autre fonction recalcul et redessinne drtoit derrière
+        """
+        recalc = False
+
+        if offset_screen is not None:
+            self.offset_screen = offset_screen
+            recalc = True
+
+        if offset_base is not None:
+            self.offset_base = offset_base
+            recalc = True
+
+        if recalc:
+            pos_x = self.box_dest.pos[0] if hasattr(self.box_dest, 'pos') else 0
+            pos_y = self.box_dest.pos[1] if hasattr(self.box_dest, 'pos') else 0
+            base_pixelx, base_pixely = self.offset_ratio_to_pixel(self.offset_base)
+            self.offset_0 = [pos_x + base_pixelx + self.offset_screen[0], pos_y + base_pixely + self.offset_screen[1]]
+
+            if not not_calc_new:
+                self.precalculer_profils_statiques(recalc_a=True, recalc_b=True)
+                self.trigger_redraw()
+
+    def move_axes_machine(self, offset_move, not_calc_new=False):
+        """
+        Reçoit le déplacement en direct des axes en [µm].
+        arg:
+            - offset_move : C'est les valeurs [profondeur, rayon] en [µm] revoyé par les règles de le tour (chariot inclinable compris)
+            - not_calc_new  : À utiliser uniquement si une autre fonction recalcul et redessinne drtoit derrière
+        """
+        if offset_move is not None:
+            self.offset_move = offset_move
+            if not not_calc_new:
+                # Ici pas de précalculs, vue que ces variables sont ajouter pendant le dessin
+                self.trigger_redraw()
+
+    def new_scale(self, scale):
+        """
+        Modifie l'échelle graphique de dessin [Px/µm].
+        """
+        if scale is None:
+            # TODO: Intégrer l'appel au futur calcul de zoom Automatique
+            pass
+        elif scale > 0:
+            self.scale = scale
+        else:
+            self.scale = self.scale_def
+        
+        # On délègue proprement la mise à jour à l'entonnoir principal (recalc complet)
+        self.update_size_entities(None, self.a_entities, self.b_entities)
+
+    # vérifier l'utilité et adapter au besoin à ProfilCanvas
+    def get_relative_pos(self):
+        #TODO: A màj pour ProfilCanvas. Sert au sous formulaires inbriqué pour les Shapes (entre autres)
+        """
+        Retourne la position relative du widget par rapport à ses parents
+        ayant la méthode `get_relative_pos`.
+        Ajoute aussi le décalage manuel `self.extra_offset`
+
+        Le calcul s'arrête dès qu’un parent ne possède pas cette méthode.
+        Cela permet de contrôler jusqu'où remonter dans la hiérarchie.
+
+        Retour :
+            list [x, y] – La position cumulée dans la hiérarchie concernée.
+        """
+        #return self.pos
+        x, y = self.pos
+        parent = self.parent
+
+        if parent and hasattr(parent, 'get_relative_pos') and callable(parent.get_relative_pos):
+            px, py = parent.get_relative_pos()
+            x += px
+            y += py
+
+        # Ajout de l’offset manuel
+        x += self.extra_offset[0]
+        y += self.extra_offset[1]
+
+        return [x, y]
+
+    def get_color_source_parent(self):
+        #TODO: A màj pour ProfilCanvas. Contrôler l'utilité, avec normalise_color() normalement il n'y a plus de color = "def"
+        """
+        Remonte dans la hiérarchie des parents pour trouver le premier parent
+        possédant un attribut 'color'. Cela permet de récupérer la couleur par défaut
+        utilisée pour le dessin si elle n’est pas spécifiée.
+
+        Retour :
+            Widget ou None – Le parent possédant 'color', ou None si introuvable.
+
+        Ex. d'utilisation:
+            color_source = self.get_color_source_parent()
+            default_color = getattr(color_source, "color", (1, 1, 1, 1))
+        """
+        parent = self.parent
+
+        while parent:
+            if hasattr(parent, "color"):
+                return parent
+            parent = parent.parent
+
+        return None
+
+    def set_drawing_offset(self, x=None, y=None):
+        #TODO: Théoriquement à remplacer par update_offset()
+        """
+        Définit un décalage manuel (en pixels) appliqué au dessin du widget.
+            Ce décalage est ajouté à la position calculée automatiquement par `get_relative_pos()`
+
+        Utile pour déplacer visuellement le dessin (ex : ajouter un axe ou une légende).
+        """        
+        ox, oy = self.extra_offset
+        if x is None:
+            x = ox
+        if y is None:
+            y = oy
+        self.extra_offset = [x, y]
+
+
+    def search_min_max(self, codesearch):
+        """
+        AIGUILLAGE UNIVERSEL : Recherche la Bounding Box globale selon le code fourni.
+        Ex: "A + b" -> Liste A entière + Liste B sans lignes de connexion.
+        return: [[Xmin, Ymin], [Xmax, Ymax]] (sans adaptation des miroirs)
+        """
+        if not codesearch:
+            return False
+            
+        # Logique d'analyse de votre chaîne de caractères
+        arg_a = "a" in codesearch.lower()
+        arg_b = "b" in codesearch.lower()
+        
+        # Si la lettre est en MAJUSCULE (A ou B) -> On garde les lignes de connexion (connect_line=False)
+        # Si la lettre est en minuscule (a ou b) -> On élimine les lignes de connexion (connect_line=True)
+        maj_a = False if "A" in codesearch else True
+        maj_b = False if "B" in codesearch else True
+
+        val_a = None
+        val_b = None
+
+        if arg_a:
+            val_a = self.entities_min_max(entities=self.a_entities, connect_line=maj_a)
+            
+        if arg_b:
+            val_b = self.entities_min_max(entities=self.b_entities, connect_line=maj_b)
+        
+        # --- CONCATÉNATION ET FUSION DES DEUX LISTES (Le verdict final) ---
+        if arg_a and arg_b and val_a and val_b:
+            return [
+                [min(val_a[0][0], val_b[0][0]), min(val_a[0][1], val_b[0][1])], 
+                [max(val_a[1][0], val_b[1][0]), max(val_a[1][1], val_b[1][1])]
+            ]
+        elif arg_a:
+            return val_a
+        elif arg_b:
+            return val_b
+        else:
+            return False
+
+    def entities_min_max(self, entities, connect_line=False): 
+        """
+        MOTEUR : Calcule la Bounding Box d'une unique liste à partir de sa clé 'bbox'.
+        Retourne [[min_x, min_y], [max_x, max_y]] en microns [µm].
+        """
+        min_hor = min_vert = float('inf')
+        max_hor = max_vert = float('-inf')
+
+        # Si la liste est vide, on renvoie une boîte neutre à zéro
+        if not entities:
+            return [[0, 0], [0, 0]]
+
+        # Séparation des lignes de connexion si demandé
+        if connect_line:
+            core_entities = entities[1:-1] if len(entities) > 2 else entities
+        else:
+            core_entities = entities
+
+        # Parcours ultra-rapide basé sur les bboxes précalculées
+        for e in core_entities:
+            if "bbox" in e:
+                b = e["bbox"][0]
+                c = e["bbox"][1]
+                min_hor = min(min_hor, b[0], c[0])
+                max_hor = max(max_hor, b[0], c[0])
+                min_vert = min(min_vert, b[1], c[1])
+                max_vert = max(max_vert, b[1], c[1])
+        
+        # Sécurité de delta minimum (50 µm) pour éviter l'échelle infinie
+        if abs(min_hor - max_hor) < 50 and abs(min_vert - max_vert) < 50:
+            max_hor += 25
+            min_hor -= 25
+            max_vert += 25
+            min_vert -= 25
+
+        # On renvoie purement le résultat géométrique !
+        return [[min_hor, min_vert], [max_hor, max_vert]]
+
+    def search_auto_scale(self, code_entities, margin=[0.1, 0.1]):
+        """
+        Calcule et retourne l'échelle idéale [Px/µm] (Zoom Auto Pleine Page).
+        Normalisée : Plus besoin de lui passer la box, elle utilise self.box_dest !
+        """
+        # 1. Récupération de la Bounding Box brute via votre aiguillage universel
+        bbox = self.search_min_max(code_entities)
+        
+        # Sécurité franche : Si la pièce est vide ou invalide, on renvoie False
+        if not bbox:
+            return False
+
+        min_hor, min_vert = bbox[0]
+        max_hor, max_vert = bbox[1]
+
+        # 2. Application des marges en microns [µm] (Logique standard CSS/CAO : * 2)
+        delta_hor = (max_hor - min_hor) * (1 + margin[0] * 2)
+        delta_vert = (max_vert - min_vert) * (1 + margin[1] * 2)
+        
+        # Sécurité anti-division par zéro
+        if delta_hor == 0: delta_hor = 1
+        if delta_vert == 0: delta_vert = 1
+
+        # 3. NORMALISÉ : Récupération de la taille en pixels via self.box_dest [Px]
+        box_width = self.box_dest.size[0] if hasattr(self.box_dest, 'size') else 100
+        box_height = self.box_dest.size[1] if hasattr(self.box_dest, 'size') else 100
+
+        # 4. Calcul des deux échelles possibles [Px/µm]
+        scale_z = box_width / delta_hor
+        scale_x = box_height / delta_vert
+
+        # On prend la plus petite des deux échelles pour que la pièce rentre entièrement
+        echelle_ideale = min(scale_z, scale_x)
+
+        # Sécurité ultime franche : renvoie False en cas d'impossibilité
+        if echelle_ideale <= 0:
+            return False
+
+        return echelle_ideale
+
+
+    #======================================================
+
+    def trigger_redrawOLD(self):
+        self.pos_to_box = self.get_relative_pos() # Décallage à appliquer au dessin, actualiser avant chaque re-dessin
+        self.canvas.clear()
+        self.raw_entities = []
+
+        # DEBUG: - Pour tester avec juste une ligne
+        #self.in_entities = [{"type": "line",  "start": (0,0),  "end": (400,400)}]
+
+        if self.in_entities:
+            #source = self.get_color_source_parent()
+            #default_color = getattr(source, "color", (1, 1, 1, 1))  # Couleur par défaut
+            default_color = (0.4, 0.6, 0.4, 1)
+
+            with self.canvas:
+                #last_color = default_color  # On commence avec la couleur par défaut
+                last_color = None  # On commence avec la couleur par défaut
+
+                for e in self.in_entities:
+                    # Récupère la couleur de l'entité si définie
+                    color = e.get("color", default_color)
+                    if color == "def":
+                        color = default_color  # Si la couleur est "def", utilise la couleur par défaut
+                    if color and color != last_color:
+                        Color(*color)  # Applique la nouvelle couleur
+                        last_color = color  # Met à jour la dernière couleur appliquée
+
+                    if e['type'] == 'line':
+                        s = self.to_canvas(e['start'])
+                        t = self.to_canvas(e['end'])
+                        ligne = Line(points=[s[0], s[1], t[0], t[1]], width=2)
+                        #print(f"start:{s[0]-self.pos_to_box[0]} , {s[1]-self.pos_to_box[1]} end:{t[0]-self.pos_to_box[0]} , {t[1]-self.pos_to_box[1]}")
+                    elif e['type'] == 'arc':
+                        center = self.to_canvas(e['center'])
+                        r = e['radius'] * self.scale
+                        start = self.to_canvas(e['start'])
+                        end = self.to_canvas(e['end'])
+                        sa = self.angle_from_center(center, start)
+                        ea = self.angle_from_center(center, end)
+                        sa, ea = self.adjust_angle_for_dir_draw(sa, ea, e["cw"])
+                        ligne = Line(circle=(center[0], center[1], r, sa, ea), width=2)  
+                    elif e['type'] == 'cercle':
+                        center = self.to_canvas(e['center'])
+                        r = e['radius'] * self.scale
+                        ligne = Line(circle=(center[0], center[1], r, 0, 360), width=2)
+
+                    else:
+                        print(f"[WARN] Entité de type inconnu ignorée : {e.get('type', '???')}")
+                        continue
+                    self.raw_entities.append(ligne)
+                    
+                    #Ajouter le dessin du rectangle bbox:
+                    ''' Dessiner les bbox (pour DEBUGAGE)
+                    # Dessiner le rectangle de la bbox pour chaque entité
+                    bbox_min, bbox_max = e["bbox"]
+                    bbox_start = self.to_canvas(bbox_min)
+                    bbox_end = self.to_canvas(bbox_max)
+                    
+                    # Crée un rectangle autour de la bbox (un rectangle sans remplissage, seulement un contour)
+                    bbox_rect = Line(points=[bbox_start[0], bbox_start[1], bbox_start[0], bbox_end[1], 
+                                            bbox_end[0], bbox_end[1], bbox_end[0], bbox_start[1], 
+                                            bbox_start[0], bbox_start[1]], width=1, close=True, color=(1, 0, 0, 0.5))
+                    #self.raw_entities.append(bbox_rect)'''
+
+    """ A SUPPRIMER
+    def search_min_maxOLD(self, entities, conect_line=None): 
+        ''' Contrôle uniquement sur la taille des bbox'''
+        # 1. Calcul des min/max (dans l’unité brute)
+        min_hor = min_vert = float('inf')
+        max_hor = max_vert = float('-inf')
+
+        if not entities:
+            return [[0,0],[0,0]]
+
+        # Séparer les entités principales et les lignes de contexte (index 0 et -1)
+        if conect_line:
+            core_entities = entities[1:-1] if len(entities) > 2 else entities
+        else:
+            core_entities = self.in_entities
+
+        # j'initialise avec le premier point 'sart', pour les autre points, il correspond au point 'end' du précédant
+        #pt = core_entities[0]['start']
+        #min_hor = max_hor = float(pt[0])
+        #min_vert = max_vert = float(pt[1])
+
+        for e in core_entities:
+            b = e["bbox"][0]
+            c = e["bbox"][1]
+            min_hor = min(min_hor, b[0], c[0])
+            max_hor = max(max_hor, b[0], c[0])
+            min_vert = min(min_vert, b[1], c[1])
+            max_vert = max(max_vert, b[1], c[1])
+        
+        # Garantir un delta minimum pour que l'échelle soit pas infinie
+        if abs(min_hor - max_hor) < 50 and abs(min_vert - max_vert) < 50:
+            max_hor += 25
+            min_hor -= 25
+            max_vert += 25
+            min_vert -= 25
+
+
+
+        self.min_hor = min_hor
+        self.min_vert = min_vert
+        self.max_hor = max_hor
+        self.max_vert = max_vert
+
+        return [[min_hor, min_vert], [max_hor, max_vert]]
+    def search_min_max_OLDOLD(self, entities, conect_line=None): 
+
+        # 1. Calcul des min/max (dans l’unité brute)
+        #min_hor = min_vert = float('inf')
+        #max_hor = max_vert = float('-inf')
+
+        if not entities:
+            return [[0,0],[0,0]]
+
+        # Séparer les entités principales et les lignes de contexte (index 0 et -1)
+        if conect_line:
+            core_entities = entities[1:-1] if len(entities) > 2 else entities
+        else:
+            core_entities = self.in_entities
+
+        # j'initialise avec le premier point 'sart', pour les autre points, il correspond au point 'end' du précédant
+        pt = core_entities[0]['start']
+        min_hor = max_hor = float(pt[0])
+        min_vert = max_vert = float(pt[1])
+
+        for e in core_entities:
+            #for pt in [e['start'], e['end']]:
+            if e['type'] == 'arc' or e['type'] == 'cercle':
+                c = e['center']
+                r = e['radius']
+                min_hor = min(min_hor, c[0] - r)
+                max_hor = max(max_hor, c[0] + r)
+                min_vert = min(min_vert, c[1] - r)
+                max_vert = max(max_vert, c[1] + r)
+            else:
+                pt = e['end']
+                min_hor = min(min_hor, pt[0])
+                max_hor = max(max_hor, pt[0])
+                min_vert = min(min_vert, pt[1])
+                max_vert = max(max_vert, pt[1])
+
+        
+        self.min_hor = min_hor
+        self.min_vert = min_vert
+        self.max_hor = max_hor
+        self.max_vert = max_vert
+
+        return [[min_hor, min_vert], [max_hor, max_vert]]
+    def search_min_max_FORME_PLUS_BBOX(self, entities, conect_line=None): 
+
+        # 1. Calcul des min/max (dans l’unité brute)
+        #min_hor = min_vert = float('inf')
+        #max_hor = max_vert = float('-inf')
+
+        if not entities:
+            return [[0,0],[0,0]]
+
+        # Séparer les entités principales et les lignes de contexte (index 0 et -1)
+        if conect_line:
+            core_entities = entities[1:-1] if len(entities) > 2 else entities
+        else:
+            core_entities = self.in_entities
+
+        # j'initialise avec le premier point 'sart', pour les autre points, il correspond au point 'end' du précédant
+        pt = core_entities[0]['start']
+        min_hor = max_hor = float(pt[0])
+        min_vert = max_vert = float(pt[1])
+
+        for e in core_entities:
+            #for pt in [e['start'], e['end']]:
+            if e['type'] == 'arc' or e['type'] == 'cercle':
+                c = e['center']
+                r = e['radius']
+                min_hor = min(min_hor, c[0] - r)
+                max_hor = max(max_hor, c[0] + r)
+                min_vert = min(min_vert, c[1] - r)
+                max_vert = max(max_vert, c[1] + r)
+            else:
+                pt = e['end']
+                min_hor = min(min_hor, pt[0])
+                max_hor = max(max_hor, pt[0])
+                min_vert = min(min_vert, pt[1])
+                max_vert = max(max_vert, pt[1])
+
+            b = e["bbox"][0]
+            c = e["bbox"][1]
+            min_hor = min(min_hor, b[0], c[0])
+            max_hor = max(max_hor, b[0], c[0])
+            min_vert = min(min_vert, b[1], c[1])
+            max_vert = max(max_vert, b[1], c[1])
+
+        
+        self.min_hor = min_hor
+        self.min_vert = min_vert
+        self.max_hor = max_hor
+        self.max_vert = max_vert
+
+        return [[min_hor, min_vert], [max_hor, max_vert]]
+    def get_min_maxOLD(self):
+        fact_hor = -1 if self.mirror_hor else 1
+        fact_vert = -1 if self.mirror_vert else 1
+        return [[self.min_hor * fact_hor, self.min_vert * fact_vert], [self.max_hor * fact_hor, self.max_vert * fact_vert]]
+    def get_min_max(self):
+        fact_hor = -1 if self.mirror_hor else 1
+        fact_vert = -1 if self.mirror_vert else 1
+        return [[self.min_hor * fact_hor, self.min_vert * fact_vert], [self.max_hor * fact_hor, self.max_vert * fact_vert]]
+
+    def trigger_changsizeOLD(self, box_size=None, entities=None, conect_line=None, search_min_max=True):
+        if entities is not None:
+            self.in_entities = entities
+
+        self.box_size = box_size
+        
+        if conect_line is not None:
+            self.conect_line = conect_line
+
+        if not self.in_entities:
+            self.raw_entities= []
+            self.canvas.clear()
+            return
+
+        if self.box_size is None:
+            self.scale = 1.0
+            self.offset_hor = self.offset_vert = 0.0
+        elif self.box_size is False:    # petite subtilité pour juste commencer par search_min_max()
+            self.canvas.clear()
+            return self.search_min_max(self.in_entities, self.conect_line)
+        else:
+            if search_min_max:
+                if self.search_min_max(self.in_entities, self.conect_line) == [[0,0],[0,0]]:
+                    return [[0,0],[0,0]]
+            
+            min_hor = self.min_hor
+            min_vert = self.min_vert
+            max_hor = self.max_hor
+            max_vert = self.max_vert
+            # Ajouter une marge de ~20%
+            margin_hor = (max_hor - min_hor)*0.1
+            margin_vert = 0 #(max_vert - min_vert)*0.2 Pour rester compatible avec l'axe. Au besoin adapter le padding de la box
+            min_hor -= margin_hor
+            max_hor += margin_hor
+            min_vert -= margin_vert
+            max_vert += margin_vert
+
+            delta_hor = max_hor - min_hor
+            delta_vert = max_vert - min_vert
+            if delta_hor == 0 : delta_hor = 1
+            if delta_vert == 0 : delta_vert = 1
+
+            scale_z = self.box_size[0] / delta_hor
+            scale_x = self.box_size[1] / delta_vert
+            self.scale = min(scale_z, scale_x)
+
+            self.offset_hor = (self.box_size[0] - delta_hor * self.scale) / 2 - min_hor * self.scale
+            self.offset_vert = (self.box_size[1] - delta_vert * self.scale) / 2 - min_vert * self.scale
+            self.offset_hor_mirror = (self.box_size[0] - delta_hor * self.scale) / 2 + max_hor * self.scale
+            self.offset_vert_mirror = (self.box_size[1] - delta_vert * self.scale) / 2 + max_vert * self.scale
+            #print(f"DEBUG_offset_hor: (sizeBox:({self.box_size[0]} : {self.box_size[1]}) - deltaX:{delta_hor * self.scale})/2 - minX:{min_hor * self.scale} = {self.offset_hor}")
+        self.trigger_redraw()
+    
+    """
+
+    
+    def get_offsetOLD(self):
+        return [self.offset_hor_mirror if self.mirror_hor else self.mirror_hor, [self.offset_vert_mirror if self.mirror_vert else self.mirror_vert]]
+
+    def to_canvasOLD(self, pos, apply_pos_offset=True):
+        """
+        Convertit des coordonnées machine (vert_raw, hor_raw)
+        vers des coordonnées Kivy (x_kivy, y_kivy)
+        """
+
+        hor_raw = pos[0]  # axe horizontal → x en Kivy
+        vert_raw = pos[1]  # axe vertical   → y en Kivy
+
+        x_kivy = hor_raw * self.scale * (-1 if self.mirror_vert else 1)
+        y_kivy = vert_raw * self.scale * (-1 if self.mirror_hor else 1)
+
+        hor_offset = self.offset_hor_mirror if self.mirror_vert else self.offset_hor
+        vert_offset = self.offset_vert_mirror if self.mirror_hor else self.offset_vert
+
+        if not apply_pos_offset:
+            return (x_kivy + hor_offset, y_kivy + vert_offset)
+        else:
+            return (
+                x_kivy + hor_offset + self.pos_to_box[0],  # Kivy X (horizontal)
+                y_kivy + vert_offset + self.pos_to_box[1]  # Kivy Y (vertical)
+            )
+
+    def angle_from_centerOLD(self, center, pt):
+        # ATTENTION: Kivy à le 0° vers le haut de l'écran, pas vers la droite comme beaucoup d'autres logiciels
+
+        #dx = pt[0] - center[0]
+        #dy = pt[1] - center[1]
+        dz = pt[0] - center[0]
+        dx = pt[1] - center[1]
+        angle = math.degrees(math.atan2(dz, dx))
+        return angle % 360
+
+    def adjust_angle_for_dir_drawOLD(self, θ_start, θ_end, cw=True):
+        # INFO: Kivy dessine toujours dans le sens horaire
+        if self.mirror_hor != self.mirror_vert:
+            cw = not cw  # inverser le sens si un seul miroir actif
+
+        if not cw:  # on inverse les angles si on veut CCW
+            θ_start, θ_end = θ_end, θ_start
+
+        if θ_end < θ_start:
+            θ_end += 360
+
+        return θ_start, θ_end
+
+    def set_mirror_valOLD(self, mirror_hor=None, mirror_vert=None):
+        if mirror_hor is not None:
+            self.mirror_vert = mirror_hor
+        if mirror_vert is not None:
+            self.mirror_vert = mirror_vert
+        self.trigger_redraw()
+
+    '''
+    Si-dessous: Des fonctions qui diffèrent de 4 millis, les actions liés à la box contenant le dessin :
+        - déplacements de la box.      -> demande de dessiner à nouveau la pièce dans le canvas
+        - redimentionnement de la box. -> demande d'adapter l'échelle du dessin, avant de re-dessiner la pièce dans le canvas aux nouvelles dimentions
+    - Pourquoi ces 4 millis ? Pour éviter une collisiton des fonctions et de surcharger le logiciel inutillement tout en gardant un affichage très réactif
+    '''
+    def on_size_changedOLD(self, new_size=None):
+        self.box_size = new_size
+        self._need_resize = True
+        self._schedule_update()
+    def on_pos_changedOLD(self):
+        self._need_reposition = True
+        self._schedule_update()
+    def _schedule_updateOLD(self):
+        ''' Lance le compte-à-rebourd, sauf si désactivé par un parent '''
+        if not self._auto_update_enabled:
+            return
+    
+        if not self._update_scheduled:
+            self._update_scheduled = True
+            Clock.schedule_once(self._deferred_update, 0.04)
+    def _deferred_updateOLD(self, dt):
+        '''Une fois le compte-à-rebourd terminé, exécute le fonction approprié. Et réinitialise pour le prochain changement'''
+        _need_resize = self._need_resize
+        self._need_resize = self._need_reposition = self._update_scheduled = False
+
+        if _need_resize:
+            self.trigger_changsize(self.box_size, conect_line=self.conect_line)
+        else:
+            self.update_entities(self.in_entities)
+    def set_auto_updateOLD(self, auto_update_enabled):
+        """
+        Active ou désactive la mise à jour automatique de cet objet.
+
+        Args:
+            auto_update_enabled (bool): 
+                - True : l'objet effectue ses mises à jour automatiquement 
+                  (avec les fonctions: on_size_changed et on_pos_changed)
+                - False : les mises à jour doivent être déclenchées manuellement depuis l'extérieur.
+                  Dans ce cas, les appels à on_size_changed et on_pos_changed n'auront aucun effet
+                    (car _schedule_update est bloqué).
+                  Il faut donc utiliser directement update_entities() ou trigger_changsize().
+
+        """
+        self._auto_update_enabled = auto_update_enabled
+
+
 
 class DetailView(Widget):
     axis_line = ObjectProperty(None)        # lien vers l'instance, indispensable
@@ -527,7 +1304,7 @@ class DetailView(Widget):
         self._update_scheduled = False
 
         
-        # Initialiser pour donner l'accès à : self.profile.get_min_max(). Ps: utiliser box_size=False pour éviter de tous calculer et dessiner avec une taille de boxe pas encore connue
+        # Initialiser pour donner l'accès à : self.profile.get_min_max(). Ps: utiliser box_size=False pour éviter de tous calculer et dessiner avec une taille de box pas encore connue
         self.profile = ProfilPiece(entities=entities , box_size=False, conect_line=conect_line, mirror_vert=mirror_vert, mirror_hor=mirror_hor)
         self.profile.set_auto_update(False) # Désactiver les mise à jour automatique de cette objet, c'est DetailView qui s'en charge
 
@@ -1895,7 +2672,7 @@ def calculate_bbox_for_circle(B, radius):
 # >>> A déplacer dans theme_manager.py ???
 def normalize_color(color):
     """
-    Normalise une couleur au format (r, g, b, a) en float [0.0–1.0].
+    Normalise une couleur au format (r, g, b, a) en float [0.0 à 1.0].
     Accepte :
         - Tuple/list (r, g, b)
         - Tuple/list (r, g, b, a)

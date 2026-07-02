@@ -396,6 +396,67 @@ class DroGraph(BoxLayout):
        Si le dessin sort de l'écran, reset l'offset de base au centre de la boîte.
     ========================================================================
     """
+    """
+    ========================================================================
+    🛠️ NOTES DE ROUTE : MODE CINÉMATIQUE INTERACTIF (BOÎTE DE TRANSFERT)
+    ========================================================================
+    
+    1. LE COMMUTATEUR DE SIGNAL ('move_mode') :
+       Géré par le formulaire principal (Chef d'orchestre), ce bouton poussoir
+       possède deux statuts exclusifs pour l'usinage et l'inspection :
+       - 'Piece_Mobile' : Le burin reste fixe à l'écran, la pièce glisse (Usinage standard).
+       - 'Burin_Mobile' : La pièce est ancrée sur l'écran, le burin glisse (Inspection).
+
+    2. LE SECRET DE LA TRANSITION "SANS SECOUSSE" :
+       Au moment précis du clic sur 'move_mode', l'image à l'écran ne doit pas sauter.
+       On réalise un transfert de référentiel mathématique en jouant sur les offsets :
+       
+       -> Passage vers 'Piece_Mobile' :
+          - On fige le burin : calque_outil.offset_add += calque_outil.offset_move
+          - On coupe son moteur dynamique : calque_outil.offset_move = [0, 0]
+          - On compense la pièce : calque_piece.offset_add -= position_actuelle_regles_pixels
+          - On active son moteur dynamique : calque_piece.offset_move = position_actuelle_regles_pixels
+          
+       -> Passage vers 'Burin_Mobile' :
+          - On fige la pièce : calque_piece.offset_add += calque_piece.offset_move
+          - On coupe son moteur dynamique : calque_piece.offset_move = [0, 0]
+          - On compense le burin : calque_outil.offset_add -= position_actuelle_regles_pixels
+          - On active son moteur dynamique : calque_outil.offset_move = position_actuelle_regles_pixels
+
+    3. LES 3 POUSSOIRS COMPLÉMENTAIRES DE L'INTERFACE :
+       - Bouton 'Auto-Zoom' : Calcule le scale idéal "Pleine page" de la pièce, l'inscrit 
+         dans self.scale, le synchronise sur le burin, puis repasse immédiatement en Manuel.
+       - Bouton 'Auto-Centre' : Si actif, calcule les min/max géométriques de la pièce 
+         pour forcer un décalage self.offset_0 centré au milieu du cadran.
+       - Bouton 'Zoom-Def' & 'Recentrer' : Restaurations de secours. En mode suivi outil,
+         'Recentrer' réinjecte self.offset_0_def pour caler le burin à 1/3 haut et 2/3 droite.
+
+    4. SYNTAXE PYTHON EXTRÊME :
+       - Remplacer tous les anciens dict{None} par [] (listes d'entités géométriques).
+       - La clé "pos" à l'intérieur de self.offsettool_entities prend obligatoirement des guillemets.
+       - Utiliser 'is not None' pour autoriser [] (vider la machine) et rejeter None (ignorer la mise à jour).
+    ========================================================================
+    """
+    def change_move_mode(self):
+        last_status = "Piece_Mobile" if self.move_mode else "Burin_Mobile"
+        last_canvas_move = self.calque_part if self.move_mode else self.calque_tool
+        next_canvas_move = self.calque_tool if self.move_mode else self.calque_part
+        # - 'Piece_Mobile' : Le burin reste fixe à l'écran, la pièce glisse (Usinage standard).
+        # - 'Burin_Mobile' : La pièce est ancrée sur l'écran, le burin glisse (Inspection).
+        
+        # on mets à jour les offsets dans le canvas qui ce déplace et remplacement de la sauvgarde pour le prochain changement
+        next_last_offset_save = {"offset_add": next_canvas_move.offset_add.copy(), "ratio_used": next_canvas_move.offset_add_ratio}
+        next_canvas_move.offset_add,  next_canvas_move.offset_add_ratio = self.last_offset
+
+        self.last_offset =  next_last_offset_save
+
+
+        next_last_offset = {"offset_add": next_canvas_move.offset_add.copy(), "ratio_used": next_canvas_move.offset_add_ratio}
+        
+        self.move_mode = not self.move_mode
+
+
+
     pass
 
 
