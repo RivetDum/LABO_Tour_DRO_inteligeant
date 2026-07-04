@@ -137,3 +137,35 @@ Aide pour la mise en place de forme sur point :
     Rainure (fonctionnelle : circlip, clavette, gaissage, etc.)
     Lamage (pour vis)
     (Eventuellement) Arrondi (populaire, moins normé)
+
+# 🛠️ Stratégie Cinématique ESP32 : Algorithme Anti-Collision & Rayon de Bec
+        Ce document résume la logique géométrique hybride validée pour le calcul temps réel de la compensation du rayon de bec du burin et l'évitement prédictif des collisions (look-ahead) sur l'ESP32.
+
+        ## 📐 1. Architecture Globale : Répartition des rôles (Kivy ↔️ ESP32)
+        * **Kivy (Le Cerveau CAO)** : Dispose de la puissance de calcul. Il utilise les Bounding Boxes (BBox) ultra-précises de la pièce pour filtrer la géométrie et envoyer régulièrement (min. 40Hz) à l'ESP32 uniquement les **3 à 5 segments maîtres** les plus proches du burin.
+        * **ESP32 (La Sécurité Haute Vitesse)** : Libéré du tri lourd, il tourne sa loop à haute fréquence exclusivement sur ce sous-ensemble de segments pour calculer les distances, anticiper l'inertie des manivelles et piloter l'axe incliné (moteur pas-à-pas).
+
+        ## 🧮 2. Modélisation de l'Outil (La Plaquette)
+        * L'ESP32 ne calcule pas le corps complexe en acier du burin pour ne pas saturer son processeur.
+        * L'outil est résumé à **un cercle de sécurité unique de rayon combiné ($R_{\text{outil}} + \text{offset\_usinage}$)** centré sur son point pilote théorique `(0,0)`.
+
+        ## 🔄 3. Algorithme Hybride d'Usinage des Arcs (Facettes ↔️ Cercle Continu)
+        Pour garantir à la fois la légèreté informatique et un état de surface parfaitement lisse (sans facettes), l'arc de cercle est traité par un double système :
+
+        ### A. Le Filtre d'Approche par Facettes (L'Interrupteur)
+        * Au chargement, l'arc de la pièce est décomposé virtuellement en **petites facettes de droites (ex: tous les 20°)**, dotées de leurs propres BBox.
+        * **Règle Spécifique des Rayons Circonscrits (Convexes)** : Le premier et le dernier segment de l'arc sont obligatoirement des **demi-segments** partant pile du point de tangence initial (0°) pour éliminer tout débordement de sécurité dans le vide et éviter les faux déclenchements.
+
+        ### B. L'Aiguillage Dynamique dans la Loop (Au micron près)
+        À chaque cycle, l'ESP32 compare en direct la position du burin par rapport à la droite tangente de la pièce et la facette d'entrée de l'arc :
+        1. **Tant que la facette est plus loin que la droite tangente** ➡️ Le burin est sur la partie rectiligne. L'ESP32 utilise l'équation standard de distance perpendiculaire à une droite ($ax + bz + c = 0$).
+        2. **Dès que la facette devient plus proche** ➡️ **Bascule instantanée.** L'ESP32 sait que la frontière de l'arrondi est franchie. Il quitte l'analyse linéaire et active la formule du **vrai cercle analytique continu** (Distance Centre-Centre).
+        3. **Au Point de Tangence Exact** ➡️ Les deux formules (droite et cercle) donnent la même valeur au micron près. La bascule se fait « au bol » sans aucun saut ni secousse mécanique.
+        4. **Sortie d'Arc** ➡️ Dès que la droite tangente suivante redevient la plus restrictive, le calcul bascule à nouveau sur la droite.
+
+        ## 🏎️ 4. Anticipation Dynamique de l'Arrêt (Look-Ahead Manuel)
+        Contrairement à une CNC, la vitesse d'avance est dictée par les mains de l'opérateur sur les manivelles.
+        1. **Calcul du Vecteur Vitesse ($\vec{V}$)** : L'ESP32 mesure l'écart de temps ($\Delta t$) entre les impulsions des règles optiques pour calculer en direct $V_z$, $V_x$ et l'angle d'approche ($\theta = \text{atan2}(V_x, V_z)$).
+        2. **Calcul de la Distance d'Arrêt ($D_{\text{arrêt}}$)** : Intègre l'accélération maximale ($a_{\max}$) que le moteur pas-à-pas peut encaisser sans sauter de pas face à l'inertie du chariot :
+        $$D_{\text{arrêt}} = \frac{V^2}{2 \cdot a_{\max}} + (\text{Temps\_de\_réaction} \cdot V) + \text{offset\_sécurité}$$
+        3. **Déclenchement du Fusible** : Dès que la distance minimale par rapport au profil analytique devient égale ou inférieure à cette distance d'arrêt dynamique, l'ESP32 prend le contrôle pour appliquer la rampe de freinage d'urgence ou faire reculer l'axe incliné.

@@ -522,47 +522,26 @@ class ProfilPiece(Widget):
 
 # Remplassante de ProfilPiec()
 class ProfilCanvas(Widget):
-    """
-    ⚙️ VOS INFOS DE REPRISE (À garder sous le coude) :
-
-        1. LE CONSTRUCTEUR UNIVERSEL (__init__)
-        -> Accepte : entities_dessin, entities_machine, scale=None (si None -> zoom auto)
-        -> Initialise vos variables de comparaison : self.last_scale, self.last_box_size
-        -> S'adapte au Pop-up (1 liste) ET à la DRO (2 calques superposés) sans rien casser.
-
-        2. L'ALGORITHME ANTI-LAG (60Hz)
-        -> Étape Statique (Au repos / Si zoom change) :
-            pt.pixel_fixe = Position_Boite + (pt_millimetres * scale) + offset_souris
-        -> Étape Dynamique (En usinage à 60Hz) :
-            regle_pixel = position_regle_machine * scale
-            pixel_final = pt.pixel_fixe + regle_pixel (Une seule addition !)
-
-        3. LES OPTIONS VISUELLES D'ATELIER
-        -> Option "Filet" (Line) vs "Remplir" (Ellipse/Mesh pour le burin et la passe).
-        -> Opacité (Alpha) : Utilisation du 4ème chiffre RGBA pour le halo de passe transparent.
-        -> Flag de comparaison : Si len(liste1) != len(liste2), le fond d'écran passe du bleu nuit au rouge alerte.
-
-            """
     """ (docstring de classe)
-        Widget personnalisé pour dessiner des entités géométriques (lignes et arcs)
-        à l'intérieur d'une boîte de dessin. Gère le redimensionnement semi-automatique
-        et la mise à l'échelle selon la taille du widget parent (si transmise).
+    Widget personnalisé pour dessiner des entités géométriques (lignes, arcs et plaquettes)
+    à l'intérieur d'une boîte de dessin. Gère le redimensionnement et la mise à l'échelle
+    automatique ou fixe selon la taille du widget parent (BoxLayout) ou l'échelle transmise.
 
-        Attributs :
-        - entities : liste d'entités brutes à dessiner (non mises à l'échelle).
-        - box_size : taille de la boîte cible (facultatif, sinon pas de mise à l'échelle).
-        - scale : facteur d'échelle calculé automatiquement.
-        - offset_vert / offset_y : décalage appliqué pour centrer le dessin.
-        - raw_entities : liste des objets graphiques ajoutés au canvas.
+    Attributs :
+    - a_entities, b_entities : Listes d'entités brutes en microns [µm] (Pièce / Outil).
+    - box_dest               : Lien vers le BoxLayout de destination (pour relevé de taille [Px] et position).
+    - scale                  : Facteur d'échelle graphique appliqué au dessin en [Px/µm].
+    - offset_0               : Coordonnée absolue [Px] de l'écran correspondant au point 0,0 de la pièce.
+    - a_segments, b_segments : Listes des segments convertis en pixels fixes [Px], prémâchés pour Kivy.
 
-        Méthodes principales :
-        - update_entities() : mettre à jour les entités à dessiner.
-        - update_size_entities() : mettre à jour les entités et redimensionner.
-        - no_scale() : désactive l'échelle (dessin brut).
-        - trigger_redraw() : force un redessin.
-        - trigger_changsize() : recalcule échelle et offset, puis redessine.
+    Méthodes principales :
+    - update_size_entities() : Met à jour la box de destination et réaligne l'ancrage spatial de la Trinité.
+    - update_offset()        : Modifie les offsets statiques de positionnement (glisser de la souris opérateur).
+    - move_axes_machine()    : Reçoit les microns des règles de l'ESP32. Tracé dynamique à calcul ultra-allégé.
+    - search_auto_scale()    : Calcule et renvoie l'échelle idéale [Px/µm] pour afficher la pièce "Pleine Page".
+    - set_scale()            : Paramètre le zoom manuel ou enclenche le calcul automatique (force le recalcul global).
+    - up_drawing()           : Portier public qui cadence les demandes de rafraîchissement sur le métronome de 25ms.
     """
-    _auto_update_enabled = True  # Par défaut, activé
 
     def __init__(self, box, offset_pos=[0, 0], offset_move=None, scale=None, mirror_vert=True, mirror_hor=False, conect_line=False,
                  A_entities=None, A_outline_width=1.5, A_fill_color=None,
@@ -576,7 +555,8 @@ class ProfilCanvas(Widget):
         self.box_dest = box            # Lien vers la boîte de l'écran pour calculer sa taille et sa position
         self.mirror_vert = mirror_vert  # TODO:à mettre en place. Utiliser un mirroir vertical pour le dessin (et les offset ?)
         self.mirror_hor = mirror_hor    # TODO:à mettre en place. Utiliser un mirroir horizontal pour le dessin (et les offset ?)        
-        # C'est devenu une fonction momentané qui ajuste scale ==>self.auto_scale = True if scale is None else False  # Utiliser le zoom automatique en fonction de la taille de la box
+        self.auto_scale = True if scale is None else False  # Utiliser le zoom automatique en fonction de la taille de la box
+        self.auto_scale_entities_def = "defCode AB" # = "A et/ou B" les list[_entities] à utiliser par défaut
         self.scale = scale if (scale is not None and scale > 0) else 1.0    # ne jamais passer scale à 0 !!     Échelle graphique du dessin en[Px/µm]
         self.scale_def = self.scale     # TODO: devra être importée depuis les paramètres ==> Échelle par défaut en[Px/µm]
         self.connect_line = conect_line                     # Utiliser le premier et dernier segment pour calculer le zoom automatique
@@ -589,13 +569,6 @@ class ProfilCanvas(Widget):
         box_y = self.box_dest.pos[1] if hasattr(self.box_dest, 'pos') else 0
         base_pixelx, base_pixely = self.offset_ratio_to_pixel(self.offset_base) #TODO: fonction à écrire
         self.offset_0 = [box_x + base_pixelx + self.offset_screen[0], box_y + base_pixely + self.offset_screen[1]] # position absolue de la coordonnée 0,0 pour notre dessin
-        #self.offset_0_def = self.offset_0.copy() # Valeur de réinitialisation. Info: .copy() pour isoler la liste en mémoire
-        # ci-dessous vient inutile, quand self.offset_move == [0.0, 0.0] on ne l'utilise pas autrement oui !
-        #self.up_move = True if offset_move is not None else False   # doit-on prévoire des déplacement sans recalcul (juste ajouter les déplacement des axes de la machine par ex.)
-        #if self.up_move:
-        #    self.offset_move = [offset_move[0] * self.scale, offset_move[1] * self.scale]   # offset représantant les mouvement des axes machine, mise à l'échelle
-        #else:
-        #    self.offset_move = [0.0, 0.0]
 
         # ==========================================================
         # CONFIGURATION LISTE 1 : LE DESSIN ACTUEL (Pièce)
@@ -616,33 +589,74 @@ class ProfilCanvas(Widget):
         # ==========================================================
         # CONFIGURATION GÉNÉRALE 2ème partie
         # ==========================================================
-        # Vos variables d'historique anti-lag viendront se poser ici !
-        #self.last_scale = self.scale
-        #self.last_offset_0 = self.offset_0.copy()
-
-        self.trigger_changsize(self.box_dest)
-
-    def update_entities(self, entities, B_entities=None):       
-        """
-        Met à jour la/les listes des entités à dessiner sans modifier l'échelle.
-        """
-        recalc_a = recalc_b = False
-
-        if entities is not None:
-            self.a_entities = entities or []
-            recalc_a = True
-        if B_entities is not None:
-            self.b_entities = B_entities or []
-            recalc_b = True
+        self.recalc_a = self.recalc_b = False   # définit si .precalculer_profils_statiques() doit recalculer .a_segments et.b_segments
+        self.update_draw = False                # définit si à la fin du timer un recalcul ou re-dessin et demandé
         
-        self.precalculer_profils_statiques(recalc_a, recalc_b)
-        self.trigger_redraw() 
- 
+        # on fait tourner une fois le debounce à vide pour temporiser les màj de la fonction suivante (self.set_scale()), qui va màj l'affichage
+        self.timer_update_draw = True          # définit si un timer de debounce_affichage et en cours (True vu que l'on active ce debounce à la ligne suivante)
+        self._timer_debounce_on()       # On utilise le debounce pour une petite temporisation avant de raffraichir l'affichage
+
+        self.set_scale(scale=self.scale, auto_scale=self.auto_scale)    # pour forcer les calculs et l'affichage à ce mettre à jour
+
+    # Fonction de debounce pour les calculs lourd et la màj graphique
+    def up_drawing(self):
+        """
+        PORTIER : Reçoit toutes les requêtes de l'IHM (Souris, Manivelles, Zoom).
+        """
+        if self.timer_update_draw is False:
+            # L'écran est au repos : on recalcul et on dessine tout de suite, puis on allume le métronome
+            self._time_auto_draw(restart=True)
+        else:
+            # Le timer tourne déjà : on lève le drapeau qui dit à la fin de ton debounce recommence il y a de nouveau changement.
+            self.update_draw = True
+    def _time_auto_draw(self, restart=False):
+        """
+        CADENCEUR CHIRURGICAL : Gère l'exécution des calculs et du tracé 
+        selon l'état des drapeaux et du métronome de 25ms.
+        """
+        if restart or self.update_draw: # si des modifications sont pas encore dessinées
+            # On verrouille le statut du métronome en cours (comme il va être re-lancé on le laisse marqué comme actif)
+            self.timer_update_draw = True
+            # On nettoie le drapeau pour pouvoir détecter les mouvements pendant le temps de debounce !
+            self.update_draw = False
+            local_recalc_a = self.recalc_a
+            local_recalc_b = self.recalc_b
+            self.recalc_a = self.recalc_b = False   # ici on a màj tous les flags avant l'exécution des fonctions lourdes en temps
+
+            # --- 1. FILTRE DU PRÉCALCUL GÉOMÉTRIQUE LOURD ---
+            if local_recalc_a or local_recalc_b:
+                self.precalculer_profils_statiques(local_recalc_a, local_recalc_b)
+
+            # --- 2. TRAÇAGE À L'ÉCRAN ---
+            # S'exécute à chaque battement actif (Usinage / Manivelle / Glisser)
+            self.trigger_redraw()
+
+            # --- 3. RELANCE DU BOUCLIER TEMPOREL ---
+            # On ré-arme le chrono pour contrôler les modifications qu'il y aura u dans 25ms ET si non on autorise un redessin imédiat
+            self._timer_debounce_on()
+            
+        else:
+            # Fin du mouvement : Le timer a expiré et aucun nouveau déplacement n'a eu lieu.
+            # On éteint proprement le métronome, le système revient au repos à 0% de CPU.
+            self.timer_update_draw = False
+    def _timer_debounce_on(self):
+        """
+        L'HORLOGE KIVY : Patiente sagement 25 millisecondes avant de 
+        ré-interroger le cadenceur pour vérifier s'il y a de nouveaux changements.
+        """
+        self.timer_update_draw = True   # On force à true si cela avait été oublié à l'appel de la fonction
+        
+        # On utilise une fonction anonyme (lambda) pour forcer Kivy à appeler 
+        # time_auto_draw avec l'argument restart=False (votre logique de battement suivant).
+        # Le paramètre dt (delta_time) est automatiquement transmis par l'horloge Kivy.
+        Clock.schedule_once(lambda dt: self._time_auto_draw(restart=False), 0.025)  # 25ms
+
+    # Fonction qui peuvent modifier le dessin
     def update_size_entities(self, box_dest=None, entities=None, B_entities=None):
         """
         Gère le changement de géométrie et/ou le redimensionnement de la box.
         """
-        recalc_a = recalc_b = False
+        #recalc_a = recalc_b = False
 
 
         # On recalcule systématiquement offset_0 à partir de l'objet de destination actuel
@@ -654,17 +668,39 @@ class ProfilCanvas(Widget):
             pos_x = self.box_dest.pos[0] if hasattr(self.box_dest, 'pos') else 0
             pos_y = self.box_dest.pos[1] if hasattr(self.box_dest, 'pos') else 0
             self.offset_0 = [pos_x + base_pixelx + self.offset_screen[0], pos_y + base_pixely + self.offset_screen[1]]
-            recalc_a = recalc_b = True  # .offset_0 à changé, on doit refaire le pré-calcul statique des 2 listes de segments
+            #recalc_a = recalc_b = True  # .offset_0 à changé, on doit refaire le pré-calcul statique des 2 listes de segments
+            self.recalc_a = self.recalc_b = True
 
         if entities is not None:
             self.a_entities = entities or []
-            recalc_a = True
+            #recalc_a = True
+            self.recalc_a = True
         if B_entities is not None:
             self.b_entities = B_entities or []
-            recalc_b = True
+            #recalc_b = True
+            self.recalc_b = True
         
-        self.precalculer_profils_statiques(recalc_a, recalc_b)
-        self.trigger_redraw()    # DESSIN : On force Kivy à effacer la toile et à tout repeindre
+        #self.precalculer_profils_statiques(recalc_a, recalc_b)
+        #self.trigger_redraw()    # DESSIN : On force Kivy à effacer la toile et à tout repeindre
+        self.up_drawing()   # fonction qui lance les màj en fonction de self.timer_update_draw
+    def _update_entities(self, entities, B_entities=None):       
+        """
+        Met à jour la/les listes des entités à dessiner sans modifier l'échelle.
+        """
+        #recalc_a = recalc_b = False
+
+        if entities is not None:
+            self.a_entities = entities or []
+            #recalc_a = True
+            self.recalc_a = True
+        if B_entities is not None:
+            self.b_entities = B_entities or []
+            #recalc_b = True
+            self.recalc_b = True
+        
+        #self.precalculer_profils_statiques(recalc_a, recalc_b)
+        #self.trigger_redraw() 
+        self.up_drawing()   # fonction qui lance les màj en fonction de self.timer_update_draw
 
     def update_offset(self, offset_screen=None, offset_base=None, not_calc_new=False):
         """
@@ -689,10 +725,12 @@ class ProfilCanvas(Widget):
             pos_y = self.box_dest.pos[1] if hasattr(self.box_dest, 'pos') else 0
             base_pixelx, base_pixely = self.offset_ratio_to_pixel(self.offset_base)
             self.offset_0 = [pos_x + base_pixelx + self.offset_screen[0], pos_y + base_pixely + self.offset_screen[1]]
+            self.recalc_a = self.recalc_b = True
 
             if not not_calc_new:
-                self.precalculer_profils_statiques(recalc_a=True, recalc_b=True)
-                self.trigger_redraw()
+                #self.precalculer_profils_statiques(recalc_a=True, recalc_b=True)
+                #self.trigger_redraw()
+                self.up_drawing()   # fonction qui lance les màj en fonction de self.timer_update_draw
 
     def move_axes_machine(self, offset_move, not_calc_new=False):
         """
@@ -705,90 +743,101 @@ class ProfilCanvas(Widget):
             self.offset_move = offset_move
             if not not_calc_new:
                 # Ici pas de précalculs, vue que ces variables sont ajouter pendant le dessin
-                self.trigger_redraw()
+                #self.trigger_redraw()
+                self.up_drawing()   # fonction qui lance les màj en fonction de self.timer_update_draw
 
-    def new_scale(self, scale):
+    def set_scale(self, scale, auto_scale=None):
         """
-        Modifie l'échelle graphique de dessin [Px/µm].
+        Modifie ou verrouille l'échelle graphique de dessin [Px/µm].
+        arg:
+            - auto_scale:
+                >> None  : Ne change rien au mode automatique actuel (True ou False).
+                >> False : Désactive le zoom automatique.
+                >> True  : Active le zoom auto avec le code par défaut (self.auto_scale_entities_def).
+                >> str   : Active le zoom auto et force l'utilisation de ce code ("a", "b", "a B", ...).
         """
-        if scale is None:
-            # TODO: Intégrer l'appel au futur calcul de zoom Automatique
+        # --- 1. GESTION DU MODE AUTOMATIQUE (Vos 4 états) ---
+        if auto_scale is None:
+            # On ne change rien à l'état actuel de self.auto_scale !
             pass
-        elif scale > 0:
-            self.scale = scale
-        else:
-            self.scale = self.scale_def
-        
-        # On délègue proprement la mise à jour à l'entonnoir principal (recalc complet)
+            
+        elif auto_scale is True or isinstance(auto_scale, str):
+            # On active le mode automatique
+            self.auto_scale = True
+            
+            # Sélection du code de recherche (str spécifique ou valeur par défaut)
+            code_recherche = auto_scale if isinstance(auto_scale, str) else self.auto_scale_entities_def
+            
+            # Calcul de la taille idéale
+            nouvelle_echelle = self.search_auto_scale(code_recherche)
+            if nouvelle_echelle is not False:
+                self.scale = nouvelle_echelle
+            else:
+                self.scale = self.scale_def if self.scale_def > 0 else 1.0
+                
+        else: # auto_scale est explicitement False
+            # On coupe le mode automatique
+            self.auto_scale = False
+
+        # --- 2. GESTION DE L'ÉCHELLE NUMÉRIQUE EN MODE MANUEL ---
+        # On n'applique la valeur 'scale' que si le mode automatique n'est pas actif
+        if not self.auto_scale:
+            if scale is None or scale <= 0:
+                self.scale = self.scale_def if self.scale_def > 0 else 1.0
+            else:
+                self.scale = scale
+
+        # --- 3. DÉLÉGATION À L'ENTONNOIR --- (c'est cette fonction qui va mettre l'affichage à jour)
         self.update_size_entities(None, self.a_entities, self.b_entities)
-
-    # vérifier l'utilité et adapter au besoin à ProfilCanvas
-    def get_relative_pos(self):
-        #TODO: A màj pour ProfilCanvas. Sert au sous formulaires inbriqué pour les Shapes (entre autres)
+        
+        return self.scale
+    def get_scale(self):
         """
-        Retourne la position relative du widget par rapport à ses parents
-        ayant la méthode `get_relative_pos`.
-        Ajoute aussi le décalage manuel `self.extra_offset`
-
-        Le calcul s'arrête dès qu’un parent ne possède pas cette méthode.
-        Cela permet de contrôler jusqu'où remonter dans la hiérarchie.
-
-        Retour :
-            list [x, y] – La position cumulée dans la hiérarchie concernée.
+        Retourne l'échelle graphique actuelle en [Px/µm], et l'état d'activation de l'échelle automatique
         """
-        #return self.pos
-        x, y = self.pos
-        parent = self.parent
+        return {"scale": self.scale, "auto _scale": self.auto_scale, "code_search": self.auto_scale_entities_def}
 
-        if parent and hasattr(parent, 'get_relative_pos') and callable(parent.get_relative_pos):
-            px, py = parent.get_relative_pos()
-            x += px
-            y += py
-
-        # Ajout de l’offset manuel
-        x += self.extra_offset[0]
-        y += self.extra_offset[1]
-
-        return [x, y]
-
-    def get_color_source_parent(self):
-        #TODO: A màj pour ProfilCanvas. Contrôler l'utilité, avec normalise_color() normalement il n'y a plus de color = "def"
+    # fonction utilisées pour le zoom automatique et le centrage du dessin
+    def search_auto_scale(self, code_entities, margin=[0.1, 0.1]):
         """
-        Remonte dans la hiérarchie des parents pour trouver le premier parent
-        possédant un attribut 'color'. Cela permet de récupérer la couleur par défaut
-        utilisée pour le dessin si elle n’est pas spécifiée.
-
-        Retour :
-            Widget ou None – Le parent possédant 'color', ou None si introuvable.
-
-        Ex. d'utilisation:
-            color_source = self.get_color_source_parent()
-            default_color = getattr(color_source, "color", (1, 1, 1, 1))
+        Calcule et retourne l'échelle idéale [Px/µm] (Zoom Auto Pleine Page).
+        Normalisée : Plus besoin de lui passer la box, elle utilise self.box_dest !
         """
-        parent = self.parent
+        code_recherche = code_entities if isinstance(code_entities, str) else self.auto_scale_entities_def
+        # 1. Récupération de la Bounding Box brute via votre aiguillage universel
+        bbox = self.search_min_max(code_recherche)
+        
+        # Sécurité franche : Si la pièce est vide ou invalide, on renvoie False
+        if not bbox:
+            return False
 
-        while parent:
-            if hasattr(parent, "color"):
-                return parent
-            parent = parent.parent
+        min_hor, min_vert = bbox[0]
+        max_hor, max_vert = bbox[1]
 
-        return None
+        # 2. Application des marges en microns [µm] (Logique standard CSS/CAO : * 2)
+        delta_hor = (max_hor - min_hor) * (1 + margin[0] * 2)
+        delta_vert = (max_vert - min_vert) * (1 + margin[1] * 2)
+        
+        # Sécurité anti-division par zéro
+        if delta_hor == 0: delta_hor = 1
+        if delta_vert == 0: delta_vert = 1
 
-    def set_drawing_offset(self, x=None, y=None):
-        #TODO: Théoriquement à remplacer par update_offset()
-        """
-        Définit un décalage manuel (en pixels) appliqué au dessin du widget.
-            Ce décalage est ajouté à la position calculée automatiquement par `get_relative_pos()`
+        # 3. NORMALISÉ : Récupération de la taille en pixels via self.box_dest [Px]
+        box_width = self.box_dest.size[0] if hasattr(self.box_dest, 'size') else 100
+        box_height = self.box_dest.size[1] if hasattr(self.box_dest, 'size') else 100
 
-        Utile pour déplacer visuellement le dessin (ex : ajouter un axe ou une légende).
-        """        
-        ox, oy = self.extra_offset
-        if x is None:
-            x = ox
-        if y is None:
-            y = oy
-        self.extra_offset = [x, y]
+        # 4. Calcul des deux échelles possibles [Px/µm]
+        scale_z = box_width / delta_hor
+        scale_x = box_height / delta_vert
 
+        # On prend la plus petite des deux échelles pour que la pièce rentre entièrement
+        echelle_ideale = min(scale_z, scale_x)
+
+        # Sécurité ultime franche : renvoie False en cas d'impossibilité
+        if echelle_ideale <= 0:
+            return False
+
+        return echelle_ideale
 
     def search_min_max(self, codesearch):
         """
@@ -796,8 +845,11 @@ class ProfilCanvas(Widget):
         Ex: "A + b" -> Liste A entière + Liste B sans lignes de connexion.
         return: [[Xmin, Ymin], [Xmax, Ymax]] (sans adaptation des miroirs)
         """
-        if not codesearch:
-            return False
+        if not isinstance(codesearch, str):
+            if isinstance(self.auto_scale_entities_def, str):
+                codesearch = self.auto_scale_entities_def
+            else:
+                return False
             
         # Logique d'analyse de votre chaîne de caractères
         arg_a = "a" in codesearch.lower()
@@ -829,8 +881,7 @@ class ProfilCanvas(Widget):
             return val_b
         else:
             return False
-
-    def entities_min_max(self, entities, connect_line=False): 
+    def _entities_min_max(self, entities, connect_line=False): 
         """
         MOTEUR : Calcule la Bounding Box d'une unique liste à partir de sa clé 'bbox'.
         Retourne [[min_x, min_y], [max_x, max_y]] en microns [µm].
@@ -868,47 +919,343 @@ class ProfilCanvas(Widget):
         # On renvoie purement le résultat géométrique !
         return [[min_hor, min_vert], [max_hor, max_vert]]
 
-    def search_auto_scale(self, code_entities, margin=[0.1, 0.1]):
+    # Fonction de préparation du dessin et de dessin
+    def precalculer_profils_statiques(self, recalc_a=True, recalc_b=True):
         """
-        Calcule et retourne l'échelle idéale [Px/µm] (Zoom Auto Pleine Page).
-        Normalisée : Plus besoin de lui passer la box, elle utilise self.box_dest !
+        Calcule et stocke la position absolue de chaque entité en pixels [Px].
+        Intègre offset_0 et la rotation de 180° des miroirs au repos.
         """
-        # 1. Récupération de la Bounding Box brute via votre aiguillage universel
-        bbox = self.search_min_max(code_entities)
+        # --- Gestion des signes des miroirs (Rotation 180°) + échelle ---
+        # Vos variables combinées magiques [Px/µm] (signe inclus !)
+        scalex = self.scale * (-1.0 if self.mirror_hor else 1.0)
+        scaley = self.scale * (-1.0 if self.mirror_vert else 1.0)
+
+        # Récupération du point d'ancrage 0,0 absolu de l'écran [Px]
+        ox = self.offset_0[0]
+        oy = self.offset_0[1]
+
+        # --- TRAITEMENT DE LA LISTE A : LE DESSIN (PIÈCE OU OUTIL) ---
+        if recalc_a:
+            if self.a_entities:
+                # La liste contient des formes -> on appelle la sous-fonction
+                self.a_segments = self._traiter_liste_segments(self.a_entities, ox, oy, scalex, scaley)
+            else:
+                # La liste source est vide [] -> on nettoie immédiatement pour éviter les fantômes
+                self.a_segments = []
+
+        # --- TRAITEMENT DE LA LISTE B : LA MACHINE (USINAGE) ---
+        if recalc_b:
+            if self.b_entities:
+                # La liste contient des formes -> on appelle la sous-fonction
+                self.b_segments = self._traiter_liste_segments(self.b_entities, ox, oy, scalex, scaley)
+            else:
+                # La liste source est vide [] ou None -> on nettoie immédiatement
+                self.b_segments = []
+    def _traiter_liste_segments(self, liste_brute, ox, oy, scalex, scaley):
+        """
+        SOUS-FONCTION SÉCURISÉE : Parcourt une liste d'entités brutes en microns [µm]
+        et calcule les coordonnées pixels [Px] pour des LIGNES, CERCLES/ARCS et MESHES.
+        Marque les entités corrompues en type 'ERROR' pour éviter les crashs graphiques.
+        """
+        liste_pixels = []
         
-        # Sécurité franche : Si la pièce est vide ou invalide, on renvoie False
-        if not bbox:
-            return False
+        for entite in liste_brute:
+            seg = entite.copy()
+            up_ok = False
+            
+            # =================================================================
+            # --- CAS 1 : LES LIGNES ("l") ---
+            # =================================================================
+            if entite["type"] == "l" and "start" in entite and "end" in entite:
+                seg["pixel_start"] = [
+                    ox + (entite["start"][0] * scalex), 
+                    oy + (entite["start"][1] * scaley)
+                ]
+                seg["pixel_end"] = [
+                    ox + (entite["end"][0] * scalex), 
+                    oy + (entite["end"][1] * scaley)
+                ]
+                up_ok = True
 
-        min_hor, min_vert = bbox[0]
-        max_hor, max_vert = bbox[1]
+            # =================================================================
+            # --- CAS 2 : LES POLYGONES / CORPS DE PLAQUETTES ("mesh") ---
+            # =================================================================
+            elif entite["type"] == "mesh" and "vertices" in entite:
+                pixels_vertices = []
+                # vertices est une liste de points en microns : [[X1, Y1], [X2, Y2], ...]
+                for pt in entite["vertices"]:
+                    px = ox + (pt[0] * scalex)
+                    py = oy + (pt[1] * scaley)
+                    # Kivy exige une liste plate [X, Y, U, V] pour son instruction Mesh.
+                    # On fixe les coordonnées de texture (U, V) à 0.0 car c'est de la couleur unie.
+                    pixels_vertices.extend([px, py, 0.0, 0.0])
+                
+                seg["pixel_vertices"] = pixels_vertices
+                up_ok = True
 
-        # 2. Application des marges en microns [µm] (Logique standard CSS/CAO : * 2)
-        delta_hor = (max_hor - min_hor) * (1 + margin[0] * 2)
-        delta_vert = (max_vert - min_vert) * (1 + margin[1] * 2)
+            # =================================================================
+            # --- CAS 3 : LES CERCLES ("c") ET ARCS DE CERCLE ("a") ---
+            # =================================================================
+            elif "center" in entite and "radius" in entite:
+                # Calcul du centre absolu à l'écran avec l'échelle miroitée [Px]
+                cx_px = ox + (entite["center"][0] * scalex)
+                cy_px = oy + (entite["center"][1] * scaley)
+                r_px = entite["radius"] * self.scale  # Le rayon reste une distance pure, toujours positif
+                diam_px = r_px * 2
+                
+                seg["pixel_center"] = [cx_px, cy_px]
+                seg["pixel_radius"] = r_px
+                # Définition de la boîte pour le tracé de la courbe via Line(ellipse=...)
+                seg["pixel_box_pos"] = [cx_px - r_px, cy_px - r_px]
+                seg["pixel_box_size"] = [diam_px, diam_px]
+                
+                # --- SUBTILITÉ A : LE CERCLE COMPLET ("c") ---
+                if entite["type"] == "c":
+                    up_ok = True
+                # --- SUBTILITÉ B : L'ARC DE CERCLE PARFAIT ("a") ---
+                elif entite["type"] == "a" and "start" in entite and "end" in entite:
+                    # Calcul des angles bruts Kivy (0° vers le haut de l'écran)
+                    angle_s_brut = self.calculer_angle_kivy(entite["center"], entite["start"])
+                    angle_e_brut = self.calculer_angle_kivy(entite["center"], entite["end"])
+                    
+                    # Récupération du sens de rotation et ajustement aux miroirs
+                    sens_horaire = entite.get("cw", True)
+                    angle_s_kivy, angle_e_kivy = self.ajuster_angles_tracé(angle_s_brut, angle_e_brut, cw=sens_horaire)
+                    
+                    seg["pixel_angles"] = [angle_s_kivy, angle_e_kivy]
+                    
+                    up_ok = True
+
+            # =================================================================
+            # --- VOTRE FILTRE DE SÉCURITÉ INDUSTRIEL "ERROR" ---
+            # =================================================================
+            if not up_ok:
+                seg["original_type"] = seg["type"]
+                seg["type"] = "ERROR"
+                print(f"⚠️ Avertissement de _traiter_liste_segments() : Entité corrompue masquée en ERROR : {seg}")
+                
+            liste_pixels.append(seg)
+            
+        return liste_pixels
+    def calculer_angle_kivy(self, center, pt):
+        """
+        Calcule l'angle d'un point par rapport à un centre, au format Kivy.
+        Rappel : Kivy place le 0° vers le HAUT de l'écran (Axe Y).
+        Prend des coordonnées en microns [µm], retourne un angle en degrés [0° - 360°].
+        """
+        import math
+        # Inversion des axes par rapport à la trigo standard pour caler le 0° vers le haut
+        dz = pt[0] - center[0]  # Axe horizontal Z
+        dx = pt[1] - center[1]  # Axe vertical X
         
-        # Sécurité anti-division par zéro
-        if delta_hor == 0: delta_hor = 1
-        if delta_vert == 0: delta_vert = 1
+        angle = math.degrees(math.atan2(dz, dx))
+        return angle % 360.0
+    def ajuster_angles_tracé(self, angle_start, angle_end, cw=True):
+        """
+        Ajuste les angles de départ et de fin pour respecter la contrainte Kivy.
+        Rappel : Kivy dessine TOUJOURS dans le sens horaire.
+        """
+        # RÈGLE CINÉMATIQUE : Si un seul miroir est actif, le sens de rotation s'inverse !
+        if self.mirror_hor != self.mirror_vert:
+            cw = not cw
 
-        # 3. NORMALISÉ : Récupération de la taille en pixels via self.box_dest [Px]
-        box_width = self.box_dest.size[0] if hasattr(self.box_dest, 'size') else 100
-        box_height = self.box_dest.size[1] if hasattr(self.box_dest, 'size') else 100
+        # Si le tracé réel doit se faire en sens anti-horaire (CCW), 
+        # on inverse le départ et la fin pour forcer Kivy à tourner dans le bon sens visuel
+        if not cw:
+            angle_start, angle_end = angle_end, angle_start
 
-        # 4. Calcul des deux échelles possibles [Px/µm]
-        scale_z = box_width / delta_hor
-        scale_x = box_height / delta_vert
+        # On garantit que l'angle de fin est géométriquement supérieur à l'angle de départ
+        if angle_end < angle_start:
+            angle_end += 360.0
 
-        # On prend la plus petite des deux échelles pour que la pièce rentre entièrement
-        echelle_ideale = min(scale_z, scale_x)
+        return angle_start, angle_end
 
-        # Sécurité ultime franche : renvoie False en cas d'impossibilité
-        if echelle_ideale <= 0:
-            return False
+    def trigger_redraw(self):
 
-        return echelle_ideale
+        # TODO: voir la version OLD qui utilise circle pour les arc, certainement plus éfficace que l'arc d'élipse ?
+        """
+        PINCEAU RAPIDE (60Hz) : Efface le canvas et repeint les profils.
+        Gère les couleurs de remplissage globales pour la plaquette/halo,
+        et les couleurs par segment pour les lignes de contour.
+        """
+        from kivy.graphics import Color, Line, Ellipse, Mesh
 
+        self.canvas.clear()
+        
+        # --- GESTION DES SIGNES ET DÉPLACEMENTS MACHINE ---
+        mx_move = -1.0 if self.mirror_hor else 1.0
+        my_move = -1.0 if self.mirror_vert else 1.0
+        move_px = self.offset_move * self.scale * mx_move
+        move_py = self.offset_move * self.scale * my_move
 
+        with self.canvas:
+            # =================================================================
+            # COUCHE 1 : LE PROFIL DE LA MACHINE (En Rouge, en dessous)
+            # =================================================================
+            if self.b_segments:
+                for seg in self.b_segments:
+                    if seg["type"] == "ERROR":
+                        continue
+
+                    # --- 1. LES FORMES REMPLIES (Couleur globale d'IHM) ---
+                    
+                    # A. Le corps de la plaquette ('mesh')
+                    if seg["type"] == "mesh" and "pixel_vertices" in seg:
+                        if self.b_fill_color:
+                            Color(*self.b_fill_color) # On applique la couleur globale de remplissage de l'outil !
+                            v_deplaces = seg["pixel_vertices"].copy()
+                            for i in range(0, len(v_deplaces), 4):
+                                v_deplaces[i] += move_px
+                                v_deplaces[i+1] += move_py
+                            Mesh(vertices=v_deplaces, indices=list(range(len(v_deplaces) // 4)), mode="triangle_fan")
+                    
+                    # B. Le plein du cercle de congé de bec ('c' rempli)
+                    elif seg["type"] == "c" and "pixel_box_pos" in seg:
+                        if self.b_fill_color:
+                            Color(*self.b_fill_color) # Même couleur globale de remplissage pour fondre les coins
+                            bx = seg["pixel_box_pos"] + move_px
+                            by = seg["pixel_box_pos"] + move_py
+                            bw, bh = seg["pixel_box_size"], seg["pixel_box_size"]
+                            Ellipse(pos=(bx, by), size=(bw, bh))
+
+                    # --- 2. LES LIGNES DE CONTOUR (Couleur spécifique du segment) ---
+                    # On charge la couleur du segment juste avant d'insérer les lignes de tracé !
+                    Color(*seg.get("color", (0.5, 0, 0, 0.7)))
+
+                    if seg["type"] == "l" and "pixel_start" in seg:
+                        if self.b_width > 0:
+                            px1, py1 = seg["pixel_start"], seg["pixel_start"]
+                            px2, py2 = seg["pixel_end"], seg["pixel_end"]
+                            Line(points=[px1 + move_px, py1 + move_py, px2 + move_px, py2 + move_py], width=self.b_width)
+                    
+                    elif seg["type"] == "c" and "pixel_center" in seg:
+                        if self.b_width > 0:
+                            cx, cy = seg["pixel_center"], seg["pixel_center"]
+                            Line(circle=(cx + move_px, cy + move_py, seg["pixel_radius"]), width=self.b_width)
+                            
+                    elif seg["type"] == "a" and "pixel_box_pos" in seg:
+                        if self.b_width > 0:
+                            bx = seg["pixel_box_pos"] + move_px
+                            by = seg["pixel_box_pos"] + move_py
+                            bw, bh = seg["pixel_box_size"], seg["pixel_box_size"]
+                            a_start, a_end = seg["pixel_angles"], seg["pixel_angles"]
+                            Line(ellipse=(bx, by, bw, bh, a_start, a_end), width=self.b_width)
+
+            # =================================================================
+            # COUCHE 2 : LE PROFIL DE LA PIÈCE (En Vert, au-dessus)
+            # =================================================================
+            if self.a_segments:
+                for seg in self.a_segments:
+                    if seg["type"] == "ERROR":
+                        continue
+
+                    # --- 1. LES FORMES REMPLIES ---
+                    if seg["type"] == "mesh" and "pixel_vertices" in seg:
+                        if self.a_fill_color:
+                            Color(*self.a_fill_color)
+                            v_deplaces = seg["pixel_vertices"].copy()
+                            for i in range(0, len(v_deplaces), 4):
+                                v_deplaces[i] += move_px
+                                v_deplaces[i+1] += move_py
+                            Mesh(vertices=v_deplaces, indices=list(range(len(v_deplaces) // 4)), mode="triangle_fan")
+                    
+                    elif seg["type"] == "c" and "pixel_box_pos" in seg:
+                        if self.a_fill_color:
+                            Color(*self.a_fill_color)
+                            bx = seg["pixel_box_pos"] + move_px
+                            by = seg["pixel_box_pos"] + move_py
+                            bw, bh = seg["pixel_box_size"], seg["pixel_box_size"]
+                            Ellipse(pos=(bx, by), size=(bw, bh))
+
+                    # --- 2. LES LIGNES DE CONTOUR (Couleur spécifique du segment) ---
+                    Color(*seg.get("color", (0, 1, 0.5, 1)))
+
+                    if seg["type"] == "l" and "pixel_start" in seg:
+                        if self.a_width > 0:
+                            px1, py1 = seg["pixel_start"], seg["pixel_start"]
+                            px2, py2 = seg["pixel_end"], seg["pixel_end"]
+                            Line(points=[px1 + move_px, py1 + move_py, px2 + move_px, py2 + move_py], width=self.a_width)
+                    
+                    elif seg["type"] == "c" and "pixel_center" in seg:
+                        if self.a_width > 0:
+                            cx, cy = seg["pixel_center"], seg["pixel_center"]
+                            Line(circle=(cx + move_px, cy + move_py, seg["pixel_radius"]), width=self.a_width)
+                            
+                    elif seg["type"] == "a" and "pixel_box_pos" in seg:
+                        if self.a_width > 0:
+                            bx = seg["pixel_box_pos"] + move_px
+                            by = seg["pixel_box_pos"] + move_py
+                            bw, bh = seg["pixel_box_size"], seg["pixel_box_size"]
+                            a_start, a_end = seg["pixel_angles"], seg["pixel_angles"]
+                            Line(ellipse=(bx, by, bw, bh, a_start, a_end), width=self.a_width)
+
+    """ A SUPPRIMER    
+
+    # vérifier l'utilité et adapter au besoin à ProfilCanvas OBSOLETTES il me semble
+    def get_relative_pos(self):
+        #TODO: A màj pour ProfilCanvas. Sert au sous formulaires inbriqué pour les Shapes (entre autres)
+        '''
+        Retourne la position relative du widget par rapport à ses parents
+        ayant la méthode `get_relative_pos`.
+        Ajoute aussi le décalage manuel `self.extra_offset`
+
+        Le calcul s'arrête dès qu’un parent ne possède pas cette méthode.
+        Cela permet de contrôler jusqu'où remonter dans la hiérarchie.
+
+        Retour :
+            list [x, y] – La position cumulée dans la hiérarchie concernée.
+        '''
+        #return self.pos
+        x, y = self.pos
+        parent = self.parent
+
+        if parent and hasattr(parent, 'get_relative_pos') and callable(parent.get_relative_pos):
+            px, py = parent.get_relative_pos()
+            x += px
+            y += py
+
+        # Ajout de l’offset manuel
+        x += self.extra_offset[0]
+        y += self.extra_offset[1]
+
+        return [x, y]
+    def get_color_source_parent(self):
+        #TODO: A màj pour ProfilCanvas. Contrôler l'utilité, avec normalise_color() normalement il n'y a plus de color = "def"
+        '''
+        Remonte dans la hiérarchie des parents pour trouver le premier parent
+        possédant un attribut 'color'. Cela permet de récupérer la couleur par défaut
+        utilisée pour le dessin si elle n’est pas spécifiée.
+
+        Retour :
+            Widget ou None – Le parent possédant 'color', ou None si introuvable.
+
+        Ex. d'utilisation:
+            color_source = self.get_color_source_parent()
+            default_color = getattr(color_source, "color", (1, 1, 1, 1))
+        '''
+        parent = self.parent
+
+        while parent:
+            if hasattr(parent, "color"):
+                return parent
+            parent = parent.parent
+
+        return None
+    def set_drawing_offset(self, x=None, y=None):
+        #TODO: Théoriquement à remplacer par update_offset()
+        '''
+        Définit un décalage manuel (en pixels) appliqué au dessin du widget.
+            Ce décalage est ajouté à la position calculée automatiquement par `get_relative_pos()`
+
+        Utile pour déplacer visuellement le dessin (ex : ajouter un axe ou une légende).
+        '''       
+        ox, oy = self.extra_offset
+        if x is None:
+            x = ox
+        if y is None:
+            y = oy
+        self.extra_offset = [x, y]
+    
     #======================================================
 
     def trigger_redrawOLD(self):
@@ -974,7 +1321,6 @@ class ProfilCanvas(Widget):
                                             bbox_start[0], bbox_start[1]], width=1, close=True, color=(1, 0, 0, 0.5))
                     #self.raw_entities.append(bbox_rect)'''
 
-    """ A SUPPRIMER
     def search_min_maxOLD(self, entities, conect_line=None): 
         ''' Contrôle uniquement sur la taille des bbox'''
         # 1. Calcul des min/max (dans l’unité brute)
@@ -1172,18 +1518,37 @@ class ProfilCanvas(Widget):
             self.offset_vert_mirror = (self.box_size[1] - delta_vert * self.scale) / 2 + max_vert * self.scale
             #print(f"DEBUG_offset_hor: (sizeBox:({self.box_size[0]} : {self.box_size[1]}) - deltaX:{delta_hor * self.scale})/2 - minX:{min_hor * self.scale} = {self.offset_hor}")
         self.trigger_redraw()
-    
-    """
+    def angle_from_centerOLD(self, center, pt):
+        # ATTENTION: Kivy à le 0° vers le haut de l'écran, pas vers la droite comme beaucoup d'autres logiciels
+
+        #dx = pt[0] - center[0]
+        #dy = pt[1] - center[1]
+        dz = pt[0] - center[0]
+        dx = pt[1] - center[1]
+        angle = math.degrees(math.atan2(dz, dx))
+        return angle % 360
+    def adjust_angle_for_dir_drawOLD(self, θ_start, θ_end, cw=True):
+        # INFO: Kivy dessine toujours dans le sens horaire
+        if self.mirror_hor != self.mirror_vert:
+            cw = not cw  # inverser le sens si un seul miroir actif
+
+        if not cw:  # on inverse les angles si on veut CCW
+            θ_start, θ_end = θ_end, θ_start
+
+        if θ_end < θ_start:
+            θ_end += 360
+
+        return θ_start, θ_end
+
 
     
-    def get_offsetOLD(self):
+    def OBSELETget_offsetOLD(self):
         return [self.offset_hor_mirror if self.mirror_hor else self.mirror_hor, [self.offset_vert_mirror if self.mirror_vert else self.mirror_vert]]
-
-    def to_canvasOLD(self, pos, apply_pos_offset=True):
-        """
+    def  OBSELETto_canvasOLD(self, pos, apply_pos_offset=True):
+        '''
         Convertit des coordonnées machine (vert_raw, hor_raw)
         vers des coordonnées Kivy (x_kivy, y_kivy)
-        """
+        '''
 
         hor_raw = pos[0]  # axe horizontal → x en Kivy
         vert_raw = pos[1]  # axe vertical   → y en Kivy
@@ -1201,43 +1566,53 @@ class ProfilCanvas(Widget):
                 x_kivy + hor_offset + self.pos_to_box[0],  # Kivy X (horizontal)
                 y_kivy + vert_offset + self.pos_to_box[1]  # Kivy Y (vertical)
             )
-
-    def angle_from_centerOLD(self, center, pt):
-        # ATTENTION: Kivy à le 0° vers le haut de l'écran, pas vers la droite comme beaucoup d'autres logiciels
-
-        #dx = pt[0] - center[0]
-        #dy = pt[1] - center[1]
-        dz = pt[0] - center[0]
-        dx = pt[1] - center[1]
-        angle = math.degrees(math.atan2(dz, dx))
-        return angle % 360
-
-    def adjust_angle_for_dir_drawOLD(self, θ_start, θ_end, cw=True):
-        # INFO: Kivy dessine toujours dans le sens horaire
-        if self.mirror_hor != self.mirror_vert:
-            cw = not cw  # inverser le sens si un seul miroir actif
-
-        if not cw:  # on inverse les angles si on veut CCW
-            θ_start, θ_end = θ_end, θ_start
-
-        if θ_end < θ_start:
-            θ_end += 360
-
-        return θ_start, θ_end
-
-    def set_mirror_valOLD(self, mirror_hor=None, mirror_vert=None):
+    def  OBSELETset_mirror_valOLD(self, mirror_hor=None, mirror_vert=None):
         if mirror_hor is not None:
             self.mirror_vert = mirror_hor
         if mirror_vert is not None:
             self.mirror_vert = mirror_vert
         self.trigger_redraw()
-
+    
+    end
+    
+    #==================================================================
+    # TODO: ci-dessous les màj restante pour adapter à ProfilCanvas()
+    #==================================================================
+    
     '''
     Si-dessous: Des fonctions qui diffèrent de 4 millis, les actions liés à la box contenant le dessin :
         - déplacements de la box.      -> demande de dessiner à nouveau la pièce dans le canvas
         - redimentionnement de la box. -> demande d'adapter l'échelle du dessin, avant de re-dessiner la pièce dans le canvas aux nouvelles dimentions
     - Pourquoi ces 4 millis ? Pour éviter une collisiton des fonctions et de surcharger le logiciel inutillement tout en gardant un affichage très réactif
     '''
+    #proposition de màj fonctions:
+    def on_box_size_changed(self, instance, new_size):
+        '''
+        Appelé automatiquement par l'événement 'on_size' du BoxLayout parent.
+        Déclenche le chrono amortisseur de 40ms.
+        '''
+        self._need_resize = True
+        self._schedule_update()
+
+    def _schedule_update(self):
+        ''' Lance le chrono de 40ms (Debouncing) pour protéger le processeur. '''
+        if not self._auto_update_enabled:
+            return
+    
+        if not self._update_scheduled:
+            self._update_scheduled = True
+            from kivy.clock import Clock
+            Clock.schedule_once(self._deferred_update, 0.04)
+
+    def _deferred_update(self, dt):
+        ''' Une fois les 40ms écoulées, on applique UN SEUL recalcul propre. '''
+        need_resize = self._need_resize
+        self._need_resize = self._update_scheduled = False
+
+        if need_resize:
+            # L'entonnoir principal se réveille et va picorer les pixels dans self.box_dest
+            self.update_size_entities(box_dest=True)
+
     def on_size_changedOLD(self, new_size=None):
         self.box_size = new_size
         self._need_resize = True
@@ -1263,7 +1638,7 @@ class ProfilCanvas(Widget):
         else:
             self.update_entities(self.in_entities)
     def set_auto_updateOLD(self, auto_update_enabled):
-        """
+        '''
         Active ou désactive la mise à jour automatique de cet objet.
 
         Args:
@@ -1275,9 +1650,10 @@ class ProfilCanvas(Widget):
                     (car _schedule_update est bloqué).
                   Il faut donc utiliser directement update_entities() ou trigger_changsize().
 
-        """
+        '''
         self._auto_update_enabled = auto_update_enabled
 
+    """
 
 
 class DetailView(Widget):
