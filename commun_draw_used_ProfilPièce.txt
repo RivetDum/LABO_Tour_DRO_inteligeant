@@ -1,0 +1,109 @@
+=========================================================================
+🔍 L'ANALYSE DES 3 INSTANCES À ADAPTER (PLAN DE CHANTIER PROFILCANVAS 2.0)
+=========================================================================
+
+1. L'instance self.profile (dans DetailView / common_draw.py)
+-------------------------------------------------------------
+Cette instance sert à afficher une vue de détail ou une Pop-up spécifique.
+
+   * Le problème à l'initialisation : 
+     L'ancien code écrivait "box_size=False". Notre nouveau constructeur 
+     ProfilCanvas exige impérativement un premier argument "box" 
+     (le lien direct vers le BoxLayout parent).
+     
+   * Ce qu'il faut chercher : 
+     Regarder dans DetailView quelle boîte ou quel Layout contient ce profil. 
+     Il faudra passer cet objet en premier argument.
+     
+   * Les fonctions appelées : 
+     L'ancien code faisait .set_auto_update(False) et .trigger_changsize(). 
+     Ces fonctions n'existent plus. Il faudra les remplacer par vos 
+     nouvelles fonctions (comme set_scale()).
+
+
+2. L'instance self.profil_fall (dans BaseShape / base_shape.py)
+---------------------------------------------------------------
+C'est le calque qui dessine la "chute" de matière dans votre formulaire de Shape.
+
+   * Le problème à l'initialisation : 
+     Elle transmettait "box_size=self.box_draw_shape.size". En Kivy, passer 
+     la taille brute sous forme de liste [X, Y] ne suffit plus, car si la 
+     fenêtre bouge, la liste ne se met pas à jour en mémoire.
+     
+   * L'adaptation : 
+     Il faut passer l'objet conteneur complet en premier argument : 
+     box=self.box_draw_shape. Notre ProfilCanvas ira lui-même lire la taille 
+     et la position en direct sur cet objet.
+     
+   * L'argument entities : 
+     Il s'appelle désormais "A_entities" (la pièce) dans notre constructeur.
+
+
+3. L'instance self.profil_piece (dans BaseShape / base_shape.py)
+-----------------------------------------------------------------
+C'est le calque jumeau du précédent, qui dessine la pièce principale dans 
+votre formulaire de réglage des profils.
+
+   * L'adaptation : 
+     Même logique que pour la chute. On l'initialise obligatoirement avec 
+     box=self.box_draw_shape et A_entities=entities.
+
+
+======================================================================================================
+
+
+RECHERCHER global de ProfilPièce avant modification: 16 results - 3 files
+
+common_draw.py:
+    14  
+    15: class ProfilPiece(Widget):
+    16      """ (docstring de classe)
+
+  1217          # Initialiser pour donner l'accès à : self.profile.get_min_max(). Ps: utiliser box_size=False pour éviter de tous calculer et dessiner avec une taille de box pas encore connue
+  1218:         self.profile = ProfilPiece(entities=entities , box_size=False, conect_line=conect_line, mirror_vert=mirror_vert, mirror_hor=mirror_hor)
+  1219          self.profile.set_auto_update(False) # Désactiver les mise à jour automatique de cette objet, c'est DetailView qui s'en charge
+
+  1225  
+  1226:         # Maintenant ou peut finir d'initialiser ProfilPiece() avec toutes les valeurs utiles qui nous manquaient !
+  1227          self.profile.trigger_changsize(box_size=self._profil_size, search_min_max=False)
+
+dro_viewer.py:
+  348      1. LE MOTEUR GRAPHIQUE (Toile blanche) :
+  349:        Utiliser notre classe 'cd.ProfilPiece(Widget)' comme instance indépendante 
+  350         dédiée à l'écran DRO. En tant que Widget pur, elle nous donne un accès direct 
+
+part\shapes\base_shape.py:
+  164  
+  165:             # Ajouter un ProfilPiece avec les entités mises à jour
+  166:             if hasattr(self, "profil_fall") and isinstance(self.profil_fall, cd.ProfilPiece):
+  167                  self.profil_fall.update_entities(fall_draw)
+  168              else:   # Si aucun ProfilPièce n'existe, en créer un nouveau
+  169:                 self.profil_fall = cd.ProfilPiece(
+  170                      entities=fall_draw,
+
+  202          else:
+  203:             # Ajouter un ProfilPiece avec les entités mises à jour
+  204:             if isinstance(self.profil_piece, cd.ProfilPiece):
+  205                  self.profil_piece.update_entities(entities)
+  206              else:   # Si aucun ProfilPièce n'existe, en créer un nouveau
+  207:                 self.profil_piece = cd.ProfilPiece(
+  208                      entities=entities,
+
+  217          self.update_box_border()
+  218:         if isinstance(self.profil_piece, cd.ProfilPiece):
+  219              self.profil_piece.on_pos_changed()
+  220:         elif hasattr(self, "profil_fall") and isinstance(self.profil_fall, cd.ProfilPiece):
+  221              self.profil_fall.on_pos_changed()
+
+  226          size_border = self.update_box_border()
+  227:         if isinstance(self.profil_piece, cd.ProfilPiece):
+  228              self.profil_piece.on_size_changed(size_border)
+  229:         elif hasattr(self, "profil_fall") and isinstance(self.profil_fall, cd.ProfilPiece):
+  230              self.profil_fall.on_size_changed(size_border)    
+
+  242  
+  243:         if isinstance(self.profil_piece, cd.ProfilPiece):
+  244              add_connect_line = self.profil_piece.conect_line
+  245              self.profil_piece.conect_line = not add_connect_line
+  246:         elif hasattr(self, "profil_fall") and isinstance(self.profil_piece, cd.ProfilPiece):
+  247              # ICI: Je pourrais tester avec une màj de box size, pour voir ? 

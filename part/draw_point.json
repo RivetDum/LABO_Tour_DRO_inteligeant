@@ -19,7 +19,7 @@
                 {"pos": [0,0],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.4)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 400,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "B-A","ref_appuis": "axis"}},
                 {"pos": [-22782,55000],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"symetry": [0,false],"largeur_a": [2000,false]}},
                 {"pos": [20000,20000],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"largeur_a": [3000,false],"largeur_c": [2000,false],"angle_a": [40000,false]}},
-                {"pos": [0,0],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"hauteur_b": [8000,false],"symetry": [0,false]}},
+                {"pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}},
                 {"pos": [-20000,200000],"shape": ["standard","Congé"],"shape_label": "Congé (R=6.0)","shape_params": {"rayon_conge": 6000}},
                 {"pos": [100000,200000],"shape": ["standard","Chanfrein"],"shape_label": null,"shape_params": {"largeur_a": [2000,false],"largeur_c": [2000,false]}},
                 {"pos": [100000,300000],"shape": ["rond","Congé"],"shape_label": "Congé (R=25.401)","shape_params": {"rayon_conge": 25401}},
@@ -39,7 +39,7 @@
                 {"pos": [20000,0],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-1.0/4.5/R0.4)","shape_params": {"largeur": 4500,"profondeur": 500,"rayon_fond": 400,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "B-A","ref_appuis": "axis"}},
                 {"pos": [20000,60000],"shape": null,"shape_label": null,"shape_params": {}},
                 {"pos": [0,-60000],"shape": null,"shape_label": null,"shape_params": {}},
-                {"pos": [0,0],"shape": ["rond","congé_new"],"shape_label": "Congé (R=0.16)","shape_params": {"rayon_conge": 160}},
+                {"pos": [0,0],"shape": ["rond","Congé"],"shape_label": "Congé (R=2.0)","shape_params": {"rayon_conge": 2000}},
                 {"pos": [1000,-60000],"shape": null,"shape_label": null,"shape_params": {}},
                 {"pos": [1000,0],"shape": ["rond","congé_new"],"shape_label": "Congé (R=30.0)","shape_params": {"rayon_conge": 30000}},
                 {"pos": [1200,60000],"shape": null,"shape_label": null,"shape_params": {}}
@@ -72,5 +72,28 @@
             ]
         }
     ],
-    "selected_part_index": 2
+    "selected_part_index": 1,
+    "NOTE A FAIRE": 
+    {
+        "Ajouter à chaque pièce": 
+        {
+            "repaire_sélect": 
+            {
+                "pos": 
+                [
+                    0,
+                    0
+                ],
+                "radius": 0
+            }
+        }
+    },
+    "Ajouter à chaque point": "Ajouter un dict comme si dessous",
+    "shape_bbox": 
+    {
+        "box_Shape": "[[Xmin, Zmin], [Xmax, Zmax]]",
+        "diag_Shape": 12500
+    },
+    "Utilité": "dans la list pour le dessin, on place le repaire_sélect sur le point sélectionné actuellement, puis on lui donne comme diamètre diag_Shape de ce point",
+    "_": " du coup on ce retrouve avec un rond qui nous indique quel est le point sélectionné (en cours) dans notre dessin"
 }

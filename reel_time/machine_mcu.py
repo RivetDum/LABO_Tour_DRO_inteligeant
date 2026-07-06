@@ -568,7 +568,35 @@ class CommManager():
                     # 🧠 LE BREAK BIEN PENSÉ : le message unique est trouvé et acquitté,
                     # on coupe immédiatement le scan du buffer pour ce cycle.
                     break 
-            
+
+            # Action spécial selon l'ID origine
+            if id_origine == 230: # ID 230 = TODO: Remplalcer par le bonne indice lor ce qu'il sera définitdans MESSEGE
+                ID_PROFIL_FAO = id_origine
+                # On vérifie à haute vitesse s'il reste encore d'autres paquets de cet ID 
+                reste_des_trames = any(paquet["id"] == ID_PROFIL_FAO for paquet in self.buffer_retry)
+                # TODO: màj du .json de sauvegarde
+
+                # TODO: Version simplifier du déroulement ! 
+                #   suite-> On pourrait imaginer une fonction qui compare pour relevé les changements entre l'envois et la réception !                                
+                if hasattr(self, "machine") and hasattr(self.machine, "point_manager"):
+                    if not reste_des_trames:
+                        # 🟢 TOUTES les trames géométriques ont été reçues, stockées et validées par l'ESP32 !
+                        # On abaisse le drapeau dé-synchronisation entre segments CAO et FAO !
+                        # Note : 'self.machine.point_manager' représente le pointeur vers votre gestionnaire de points.
+                        drapeau_synchr = True
+                        print("[🟢 FAO SYNCHRO] Le MCU a traité l'intégralité du profil. Sécurité_0 Verrouillée.")
+                    else:
+                        drapeau_synchr = False
+                    self.machine.point_manager.mcu_synchronise = drapeau_synchr
+                    # TODO: ne pas oublier de mettre à jour la sauvegarde .json avec le nouveau profil_MCU !
+                    
+                    # --- OPTIONNEL : Changement de couleur du fond d'écran Kivy ---
+                    # Si vous avez stocké le lien de votre interface, vous pouvez déclencher 
+                    # le retour au Bleu Nuit/Noir d'usine ici ou par un événement Kivy !
+            elif id_origine == 999:
+                # emplacement pour d'autre IDs à action spécial !
+                pass
+
             # On informe le décodeur général que le travail est fini avec succès (Zéro défaut = 0)
             return "FINISH", 0
 
@@ -910,7 +938,7 @@ class CommManager():
             self.buffer_binaire.extend(bloc_binaire)
 
 
-# Dans reel_time/machine_mcu.py ou dans un fichier protocol.py séparé
+# Dans reel_time/machine_mcu.py
 class CommProtocol:
     # ====================================================================
     # 📥 CATALOGUE DES MESSAGES ENTRANTS : MCU -> KIVY (Espace IN)
@@ -928,6 +956,7 @@ class CommProtocol:
         30:  {"valeurs": [], "action": "action_in_json_segments_mcu"},
         
         # ⚙️ MAINTENANCE ET BOOT PASSIF
+        230: {"valeurs": ["ping_key", "nbr_lines"], "action": "Balance_ton_profil_j'ai_bloqué_ma_comm_pout_ça"},
         248: {"valeurs": ["z_machine", "x_machine", "y_machine", "spindle_machine"], "action": None},
         255: {"valeurs": ["Id_msg_ping", "ping_key"], "action": "action_in_pong"}  # Format valeurs : "<Bi" (uint8_t, int32_t)
     }
@@ -964,8 +993,10 @@ class CommProtocol:
         0:   {"essais": 999, "tempo": 10,  "valeurs": ["err_code"]}, 
         26:  {"essais": 0,   "tempo": 999, "valeurs": ["id_prev", "id_act", "id_next"]},
         31:  {"essais": 2,   "tempo": 25,  "valeurs": ["z_m", "x_m", "y_m", "s_m"]},
-        200: {"essais": 5,   "tempo": 300, "valeurs": ["wifi_flags", "ping_key"]},
+        200: {"essais": 5,   "tempo": 300, "valeurs": ["wifi_flags"]},
         201: {"essais": 5,   "tempo": 301, "valeurs": ["new_baud"]},
+        230: {"essais": 2,   "tempo": 25,  "valeurs": ["nbr_de_line_profil"]},  # TODO: cet envois doit vider le .json de sauvegarde
+        # 231: Id réservé pour la fonction d'envois des lignes de profils
         254: {"essais": 0,   "tempo": 999, "valeurs": ["ping_time"]}
     }
 
