@@ -167,10 +167,14 @@ class ChamferShape(BaseShape):
 
     def compute_geometry(self):
         """À compléter avec la géométrie du chanfrein basée sur self.param_list"""
+
+        print("[DEBUG ChamferShape-Compute_geometry]======= START ================")
+
         try:
             new_pos = self.resolve_reference_values()
         except ValueError as e:
             #self.log_error(f"Erreur de géométrie : {e}")
+            print(f"[DEBUG ChamferShape-Compute_geometry]>> Erreur de géométrie : {e}")
             return
 
         self.geom_values = new_pos
@@ -179,6 +183,7 @@ class ChamferShape(BaseShape):
         if new_pos["pnt_aa"] is None or new_pos["pnt_cc"] is None:
             #raise ValueError(f"Erreur lors de la définission des points du chanfrein")
             #self.log_error("Erreur lors de la définition des points du chanfrein")
+            print(f"[DEBUG ChamferShape-Compute_geometry]>>Erreur lors de la définition des points du chanfrein")
             return
         
         point_aa= [self.point_b[0] + new_pos["pnt_aa"][0], self.point_b[1] + new_pos["pnt_aa"][1]]
@@ -188,17 +193,18 @@ class ChamferShape(BaseShape):
         self.config_shape_cell_value(new_pos)
 
         # Donné brut
-        self.draw_part= [{"type": "l", "start": point_aa,    "end": point_cc,  "color": th_drl["profil"], 
-            "id_pnt":None}]  # id_pnt sera màj après depuis prof_seg_pnt_recompute()
+        self.draw_part= [{"type": "d", "start": point_aa,    "end": point_cc,  "color": th_drl["profil"], "id_pnt":None, "vec_dir":[0,0]}]  # id_pnt sera màj après depuis prof_seg_pnt_recompute()
         entities = [
             {"type": "l", "start": self.pntA,   "end": self.point_b,  "color": th_drl["liaison"]},
-            {"type": "d", "start": point_aa,    "end": point_cc,  "color": th_drl["detail"]},
+            {"type": "d", "start": point_aa,    "end": point_cc,  "color": th_drl["detail"], "vec_dir":[0,0]},
             {"type": "l", "start": self.point_b,    "end": self.pntC, "color": th_drl["liaison"]},
         ]
         # donnés formatés pour dessin
         self.entities_shape = create_entities_from_raw(entities, error_color=th_drl["erreur_detail"])
         
         # Mettre à jour le dessin du détail
+
+        print(f"[DEBUG ChamferShape-Compute_geometry] self.entities_shape  : {self.entities_shape}")
         self.update_draw_shape(self.entities_shape)
 
     def resolve_reference_values(self):

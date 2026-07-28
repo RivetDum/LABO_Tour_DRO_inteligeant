@@ -56,7 +56,7 @@ class MachineState:
         self.ack_msg_id = -1
         self.ack_octets_recus = -1
 
-    def OBSELET_generer_dictionnaire_dro(self):
+    def generer_dictionnaire_dro(self):
         """Envoie les valeurs de base brutes."""
         return {
             "vert": self.x_machine,

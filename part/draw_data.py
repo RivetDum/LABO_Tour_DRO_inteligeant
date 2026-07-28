@@ -2,6 +2,7 @@
 
 from kivy.app import App
 from kivy.properties import ListProperty
+from kivy.metrics import dp
 import math
 import copy
 from kivy.uix.widget import Widget
@@ -16,8 +17,8 @@ from kivy.uix.popup import Popup
 
 from common_widgets import LabeledCell, InputCell, MyLabel, Separator
 from i18n import tr, Tr, TR  # La fonction de traduction importée tr>> tel que la traduction; Tr première lettre en majuscule; TR tous en majuscule
-from config import AXIS_CONFIG
-from part.draw_tool.popup_segment import SegmentPopupContent, PartManagerPopup
+from config import get_unit_id, parse_user_input, AXIS_CONFIG
+from part.draw_tool.popup_segment import SegmentPopupContent, PartManagerPopup, CalculatorPopup
 from part.draw_pnt_manager import PointValue, PointData, ColumnDefaultSpec
 from part.shapes.shape_editor import ShapeEditor    # part/shapes/shape_editor.py
 
@@ -104,7 +105,7 @@ class PointRow(ClickableRow):
         else:
             shape = entry.raw["shape"]
             if isinstance(shape, (list, tuple)) and len(shape) == 2 and shape[0] is not None:
-                type_str, subtype_str = map(str, shape)
+                type_str, subtype_str = str(shape[0]), str(shape[1])
                 val_def = f"{type_str} / {subtype_str}"
                 val = entry.raw.get("shape_label") or val_def
             else:
@@ -151,11 +152,9 @@ class RowEditor(BoxLayout):
         self.build_button_row()
 
     def build_input_row(self):
-        input_row = BoxLayout(orientation='horizontal', spacing=COL_SPACING, size_hint_y=None, size_hint_x = 1, height=60)
-
-        # Les clés correspondantes à chaque PointValue dans PointData
+        input_row = BoxLayout(orientation='horizontal', spacing=COL_SPACING, size_hint_y=None, size_hint_x=1, height=60)
         editable_keys = ['vert', 'hor', 'vert2', 'hor2', 'l', 'alpha']
-        all_keys = editable_keys + ['forme']  # ← Tu peux remplacer 'forme' si tu l’utilises
+        all_keys = editable_keys + ['forme']
 
         for i, key in enumerate(all_keys):
             if key == 'forme':
@@ -163,34 +162,28 @@ class RowEditor(BoxLayout):
                 if self.index == 0 or self.index + 1 >= len(self.parent_editor.points_part.entries):
                     val = "- pas possible"
                 elif isinstance(shape, (list, tuple)) and len(shape) == 2 and shape[0] is not None:
-                    type_str, subtype_str = map(str, shape)
-                    val_def = f"{type_str} / {subtype_str}"
-                    val = self.entry.raw.get("shape_label") or val_def
-                else:
-                    val = tr("no_shape")
+                    val = self.entry.raw.get("shape_label") or f"{str(shape[0])} / {str(shape[1])}"
+                else: val = tr("no_shape")
 
-                self.inpf = InputCell(text=str(val), status=0, halign='left', size_hint_x=COL_PROPORTIONS[i], width=None)  #width=COL_WIDTHS[i]
-                if self.index != 0:
-                    self.inpf.bind(focus=lambda inst, foc: self.open_shape_editor(inst, foc))
-                input_row.add_widget(self.inpf)
-                continue
+                self.inpf = InputCell(text=str(val), status=0, halign='left', size_hint_x=COL_PROPORTIONS[i], width=None)
+                # 🎯 LE TRIP CONCENTRE : La cellule forme s'abonne elle aussi à l'aiguillage unique !
+                self.inpf.bind(focus=lambda inst, foc, k=key: self._on_cell_focus_dispatcher(inst, foc, k))
+                input_row.add_widget(self.inpf); continue
 
-            # Accès à la valeur formatée pour l'édition
-            pv: PointValue = getattr(self.entry.data, key)
+            # Accès à la valeur formatée pour l'édition des axes numériques
+            pv = getattr(self.entry.data, key)
             formatted_val = pv.val_formatted(with_unit=True)
 
             # Création du champ modifiable
-            inp = InputCell(text=formatted_val, status=0, size_hint_x=COL_PROPORTIONS[i], width=None)  #width=COL_WIDTHS[i]
-            if key == 'l' and self.index != 0:
-                inp.bind(focus=lambda inst, foc: self.on_focus_segment(inst, foc, 'l'))
-            elif key == 'alpha' and self.index != 0:
-                inp.bind(focus=lambda inst, foc: self.on_focus_segment(inst, foc, 'alpha'))
-            else:
-                inp.bind(focus=self.on_input_focus(key))
-                inp.bind(text=self.on_input_changed(key))
+            inp = InputCell(text=formatted_val, status=0, size_hint_x=COL_PROPORTIONS[i], width=None)
+            
+            # 🎯 L'UNIFICATION ABSOLUE : Toutes les colonnes numériques appellent le dispatcher privé !
+            inp.bind(focus=lambda inst, foc, k=key: self._on_cell_focus_dispatcher(inst, foc, k))
+            
+            # On conserve par sécurité le changement de texte
+            inp.bind(text=self.on_input_changed(key))
 
-            self.inputs[key] = inp
-            input_row.add_widget(inp)
+            self.inputs[key] = inp; input_row.add_widget(inp)
 
         self.add_widget(input_row)
 
@@ -217,12 +210,260 @@ class RowEditor(BoxLayout):
 
         self.add_widget(btn_row)
 
+    def INUTILISEE_on_input_focus(self, key):
+        def callback(instance, value):
+            self.selct_input_focus(key, value, instance)
+        return callback
+    
+    def INUTILISEE_selct_input_focus(self, key, value, instance):
+        if value:
+            # Gagne le focus : bloquer le refresh
+            self.display_blocked = True
+            self.focus_key = key
+        else:
+            # Perd le focus : déblocage possible
+            self.display_blocked = False
+            self.focus_key = None
+
+            # Remettre le formatage correct après édition
+            if key in self.inputs:
+                pv = getattr(self.entry.data, key)
+                self.inputs[key].text = pv.val_formatted(with_unit=False)
+#----- NEW -------------------------------------------------------
+    def _on_cell_focus_dispatcher(self, instance, focused, key):
+        """
+        Aiguillage unique pour TOUTES les cellules du tableau (Axes, Segments, Formes).
+        Gère l'interverrouillage global, le focus fantôme et applique votre nomenclature d'axes.
+        """
+        # Flag pour l'utilisation tacitle de la calculette de sésie
+        mode_tactile = getattr(App.get_running_app(), 'mode_tactile_actif', False)
+        
+        # 💨 CAS 1 : LA PERTE DE FOCUS (L'opérateur valide, annule la popup ou change de case)
+        if not focused:
+            self.display_blocked, self.focus_key = False, None                        
+            # 🎯 NETTOYAGE D'OFFICE POUR TOUS LES MODES (Bureau et Tactile)
+            if key in self.inputs and key != 'forme':
+                pv = getattr(self.entry.data, key)
+                # Remet la cellule propre à l'écran avec son formatage officiel
+                instance.text = pv.val_formatted(with_unit=True)
+            # Supprime la surbrillance bleue instantanément
+            if hasattr(instance, 'cancel_selection'):
+                instance.cancel_selection()
+
+            return
+
+        # 🛡️ BARRIÈRE DE SÉCURITÉ : Si une popup est déjà ouverte, on rejette le focus de réception
+        if getattr(self, 'popup_open', False):
+            return
+
+        popup = None
+        total_points = len(self.parent_editor.points_part.entries) # Mesure en direct de la liste FAO
+
+        # Préparation des paramètres (Uniquement pour les colonnes cartésiennes)
+        if key in ['hor', 'vert', 'hor2', 'vert2']:
+            default_unit = getattr(self.entry.data, key).unit_id if hasattr(self.entry.data, key) else "dist"
+            parsed_text = parse_user_input(instance.text.strip(), default_unit)
+            if isinstance(parsed_text, str):   
+                current_unit = default_unit    
+                current_str_val = getattr(self.entry.data, key).val_formatted(with_unit=False)
+            else:    
+                current_unit = parsed_text[1]
+                current_str_val = str(parsed_text[0])
+                
+            arg_calculator_popup = {
+                "current_value": current_str_val, "current_unit": current_unit,
+                "case_desgn": AXIS_CONFIG.get(key, {}).get("screen", key),    
+                "update_value_callback": lambda pack_data: self.on_calculateur_confirm(key, pack_data, instance),
+                "size_hint": (None, None),
+                "size" : (1400, 600) 
+            }
+
+        # ─── 📦 GROUPE A : COORDONNÉES ABSOLUES ───
+        if key in ['hor', 'vert']:
+            if mode_tactile:
+                popup = CalculatorPopup(**arg_calculator_popup)
+            else:
+                pass    # on laisse ce fermer la fonction pour le mode clavier
+
+        # ─── 📦 GROUPE B : COORDINATIONS RELATIVES / DELTAS (Interdites sur l'index 0) ───
+        elif key in ['hor2', 'vert2', 'l', 'alpha'] and self.index != 0:
+            if key in ['l', 'alpha']:   # Oblique longueur ou angle
+                popup_content = SegmentPopupContent(
+                    data=copy.deepcopy(self.entry.data), key_changed=self.key_changed,
+                    on_confirm=self.on_segment_popup_confirm, key_target=key
+                )
+                popup = Popup(title=f"{TR('segment_config_title')} {key.upper()}", content=popup_content, size_hint=(None, None), size=(800, 900), auto_dismiss=False)
+                popup_content.parent_popup = popup
+            else:   # Cartésienne relative
+                if mode_tactile:
+                    popup = CalculatorPopup(**arg_calculator_popup)
+
+        # ─── 📦 GROUPE C : TERMINAISONS / RACCORDEMENTS (Forme géométrique) ───
+        elif key == "forme" and self.index != 0 and (self.index + 1) < total_points:
+            prev_pnt_raw = self.parent_editor.points_part.entries[self.index - 1].raw
+            next_pnt_raw = self.parent_editor.points_part.entries[self.index + 1].raw
+            popup = ShapeEditor(
+                point_b=self.entry, prev_pnt_raw=prev_pnt_raw, next_pnt_raw=next_pnt_raw,
+                copied_shape_data=self.parent_editor.copied_shape, mirror_z=self.parent_editor.mirror_z,
+                on_done=self.shape_edit_done
+            )
+
+        # ─── 📦 GROUPE D : CELLULES INACCESSIBLES OU VERROUILLÉES ───
+        else:
+            self.popup_open, self.display_blocked, self.focus_key = False, False, None
+            instance.focus = False
+            return 
+
+        # ─── MÉCANIQUE UNIQUE DE FERMETURE DES POPUPS (GROUPES A, B, C) ───
+        def on_close_any_popup(*args):
+            self.popup_open, self.display_blocked, self.focus_key = False, False, None
+            instance.focus = False # 🔓 JOKER 1 : Tue définitivement le rebond du focus fantôme !
+            
+            if key == "forme": 
+                shape = self.entry.raw.get("shape", None)
+                if isinstance(shape, (list, tuple)) and len(shape) == 2 and shape is not None:
+                    self.inpf.text = self.entry.raw.get("shape_label") or f"{shape[0]} / {shape[1]}"
+                else: self.inpf.text = tr("no_shape")
+
+        # ─── 🏁 LE VÉRITABLE AIGUILLAGE FINAL ───
+        if popup:
+            # 📱 OPTIONS TACTILES OU FORMES GÉOMÉTRIQUES : On verrouille tout et on lance la popup
+            self.popup_open, self.display_blocked, self.focus_key = True, True, key
+            popup.bind(on_dismiss=on_close_any_popup)
+            popup.open()
+            
+            # Nettoyage préventif de la sélection bleue pour le mode tactile
+            if hasattr(instance, 'cancel_selection'):
+                instance.cancel_selection()
+                
+            instance.focus = False # 🔓 JOKER 2 : N'agit QUE si une popup est réellement ouverte !
+            return
+        else:   
+            # 🖥️ OPTION CLAVIER DIRECT (BUREAU) : Pas de popup créée
+            # On active les verrous géométriques, mais on laisse la popup_open à False
+            self.popup_open = False
+            self.display_blocked = True
+            self.focus_key = key
+
+    def on_calculateur_confirm(self, key, pack_data, instance_input):
+        """
+        Intercepte le pack 3-en-1 renvoyé par la calculatrice à sa fermeture.
+        Injecte la chaîne texte directement dans le moteur PointValue de la cellule.
+        """
+        valeur_texte_fao = pack_data["text"] # Extraction de la chaîne formatée (ex: "50.800mm")
+        
+        # Récupération de l'objet PointValue correspondant à la colonne (ex: self.entry.data.vert)
+        pv = getattr(self.entry.data, key)
+        
+        # CONTRÒLE DES CHANGEMENTS
+        instance_parsed = parse_user_input(instance_input.text, pv.unit_id)
+        if not isinstance(pack_data, dict):
+            statut_modification = "ERROR"
+            print(f"[DEBUG RowEditor] ⚠️ pack_data invalide (pas un dict). Annulation.")
+        elif not isinstance(instance_parsed, str):
+            if pack_data["value"] != instance_parsed[0] or pack_data["unit_id"] != instance_parsed[1]:
+                statut_modification = True
+            else:
+                statut_modification = False
+        else:   # ici si la valeur d'écran et invalide, on force la re-calculation
+            statut_modification = True
+        
+        if statut_modification is True:
+            #print(f"DEBUG RowEditor_row=469: pack_data.text {pack_data["text"]} / instance_input.text {instance_input.text}")
+            # Si la valeur a changé, on applique votre formatage officiel pour la cellule visuelle
+            instance_input.text = valeur_texte_fao #pv.val_formatted(with_unit=True)
+            
+            # On marque la ligne comme "dirty" pour signaler qu'un recalcul FAO est obligatoire
+            self.entry.modified_data = True
+            
+            # Appel en cascade de votre fonction de traitement d'origine pour les autres axes reliés
+            self.process_input_change(key, valeur_texte_fao, instance_input)
+        #else:
+            #print(f"DEBUG RowEditor/on_calculateur_confirm: valeur modifié = FAUX")
+        
+        # 🎯 NETTOYAGE SÉLECTION : On force Kivy à effacer la sélection bleue sur cette case
+        if hasattr(instance_input, 'cancel_selection'):
+            instance_input.cancel_selection()
+
+#-----------------------------------------------------------------
     def on_input_changed(self, key):
         self.display_blocked = True
         def callback(instance, value):
             self.process_input_change(key, value, instance)
         return callback
+
+    def REMPLACED_on_focus_segment(self, instance, focused, key):
+        if not focused or getattr(self, 'popup_open', False):
+            return
+
+        self.popup_open = True
+        self.display_blocked = True
+        self.focus_key = key  # ← 'l' ou 'alpha'
+
+        popup_content = SegmentPopupContent(
+            data=copy.deepcopy(self.entry.data),
+            key_changed=self.key_changed,
+            on_confirm=self.on_segment_popup_confirm,
+            key_target=key
+        )
+
+        popup = Popup(
+            title=f"{TR("segment_config_title")} {key.upper()}",
+            content=popup_content,
+            size_hint=(None, None),
+            size=(800, 900),
+            auto_dismiss=False
+        )
+        popup_content.parent_popup = popup
+
+        def on_close(*args):
+            self.popup_open = False
+            self.display_blocked = False
+            self.focus_key = None
+
+        popup.bind(on_dismiss=on_close)
+        popup.open()
     
+    def _REMPLACED_on_focus_calculateur(self, instance, focused, key):
+        """
+        Gère l'ouverture de la calculatrice d'atelier.
+        Bloque les rafraîchissements de l'interface pour sécuriser la saisie.
+        """
+        # 1. Sécurité anti-double ouverture (votre cinématique d'origine)
+        if not focused or getattr(self, 'popup_open', False):
+            return
+
+        # 2. Activation des verrous (On fige l'interface !)
+        self.popup_open = True
+        self.display_blocked = True  # 🎯 ICI : On bloque le rafraîchissement global
+        self.focus_key = key
+
+        # 3. Récupération des données de la cellule
+        pv = getattr(self.entry.data, key)
+        current_str_val = str(pv.val_base())
+        current_unit = pv.unit_id if hasattr(pv, 'unit_id') else "mm"
+
+        # 4. Création de la Pop-up avec son callback de validation
+        popup = CalculatorPopup(
+            current_value=current_str_val,
+            current_unit=current_unit,
+            update_value_callback=lambda val_calculee: self.on_calculateur_confirm(key, val_calculee, instance)
+        )
+
+        # 5. Fonction de fermeture : On relâche TOUS les verrous
+        def on_close_calc(*args):
+            self.popup_open = False
+            self.display_blocked = False  # 🔓 ICI : L'interface peut à nouveau se rafraîchir
+            self.focus_key = None
+            instance.focus = False  # Sécurité focus fantôme
+
+        # On lie la fermeture de la Pop-up au nettoyage des verrous
+        popup.bind(on_dismiss=on_close_calc)
+        popup.open()
+
+        # On masque le clavier virtuel natif du système (Windows/Android)
+        instance.focus = False
+
     def on_segment_popup_confirm(self, new_vert2, new_hor2, key='l'):
         # Convertir float → str si nécessaire
         vert2_disp = str(new_vert2) if isinstance(new_vert2, (int, float)) else new_vert2
@@ -241,6 +482,7 @@ class RowEditor(BoxLayout):
 
     def process_input_change(self, key, value, instance, value2=None):
         # NOTE : set_from_input attend une str, donc conversion nécessaire en amond de value et value2
+        ''' pour la pop_up de "l" et "alpha"'''
         try:
             new_update = False
             refresh_text = False
@@ -330,64 +572,14 @@ class RowEditor(BoxLayout):
                     False
                 )
                 # Mise à jour des autres champs (sauf celui en cours d'édition)
+                
+                print(f"DEBUG_ligne665: new_update = vrai")
                 self.refresh_inputs(key, forced=refresh_text)
 
         except ValueError:
             instance.foreground_color = (1, 0, 0, 1)  # Erreur = rouge
 
-    def on_focus_segment(self, instance, focused, key):
-        if not focused or getattr(self, 'popup_open', False):
-            return
-
-        self.popup_open = True
-        self.display_blocked = True
-        self.focus_key = key  # ← 'l' ou 'alpha'
-
-        popup_content = SegmentPopupContent(
-            data=copy.deepcopy(self.entry.data),
-            key_changed=self.key_changed,
-            on_confirm=self.on_segment_popup_confirm,
-            key_target=key
-        )
-
-        popup = Popup(
-            title=f"{TR("segment_config_title")} {key.upper()}",
-            content=popup_content,
-            size_hint=(None, None),
-            size=(800, 900),
-            auto_dismiss=False
-        )
-        popup_content.parent_popup = popup
-
-        def on_close(*args):
-            self.popup_open = False
-            self.display_blocked = False
-            self.focus_key = None
-
-        popup.bind(on_dismiss=on_close)
-        popup.open()
-    
-    def on_input_focus(self, key):
-        def callback(instance, value):
-            self.selct_input_focus(key, value, instance)
-        return callback
-    
-    def selct_input_focus(self, key, value, instance):
-        if value:
-            # Gagne le focus : bloquer le refresh
-            self.display_blocked = True
-            self.focus_key = key
-        else:
-            # Perd le focus : déblocage possible
-            self.display_blocked = False
-            self.focus_key = None
-
-            # Remettre le formatage correct après édition
-            if key in self.inputs:
-                pv = getattr(self.entry.data, key)
-                self.inputs[key].text = pv.val_formatted(with_unit=False)
-
-    def open_shape_editor(self, instance, focused):    
+    def REMPLACED_open_shape_editor(self, instance, focused):    
         '''
         Ouvre le formulaire de configuration de la terminaison à appliquer sur ce point
 
@@ -421,7 +613,7 @@ class RowEditor(BoxLayout):
             self.popup_open = False
             shape = self.entry.raw.get("shape", None)
             if isinstance(shape, (list, tuple)) and len(shape) == 2 and shape[0] is not None:
-                type_str, subtype_str = map(str, shape)
+                type_str, subtype_str = str(shape[0]), str(shape[1])
                 val_def = f"{type_str} / {subtype_str}"
                 val = self.entry.raw.get("shape_label") or val_def
             else:
@@ -482,9 +674,11 @@ class RowEditor(BoxLayout):
         for key, input_cell in self.inputs.items():
             # Optionnel : coloration si modifié
             if self.key_changed.get(key):
-                input_cell.foreground_color = (1, 0, 0, 1)
+                input_cell.foreground_color = (1.0, 0.55, 0.0, 1)
+                input_cell.bold = True
             else:
                 input_cell.foreground_color = (0.3, 0.3, 0.3, 1)
+                input_cell.bold = False
 
             if (key == exclude_key or key == self.focus_key) and not forced:
                 continue  # Ne pas toucher à l'input en cours d'édition, sauf si c'est forced
@@ -498,7 +692,7 @@ class RowEditor(BoxLayout):
             shape_label = self.entry.raw.get("shape_label")
 
             if isinstance(shape, (list, tuple)) and len(shape) == 2 and shape[0] is not None:
-                type_str, subtype_str = map(str, shape)
+                type_str, subtype_str = str(shape[0]), str(shape[1])
                 val_def = f"{type_str} / {subtype_str}"
                 val = shape_label or val_def
             else:
@@ -509,7 +703,7 @@ class RowEditor(BoxLayout):
     def refresh_profil_segments(self, index, large=False):
         self.parent_editor.points_part.prof_seg_pnt_recompute(index, changed_pos=large)
     
-class PointDrawEditor(BoxLayout):
+class OLD_PointDrawEditor(BoxLayout):
     def __init__(self, part_points, **kwargs):
         super().__init__(**kwargs)
         self.points_part = part_points  # class PointManager()
@@ -518,6 +712,7 @@ class PointDrawEditor(BoxLayout):
         self.spacing = COL_SPACING
         
         self.mirror_z = False
+        # SWitcher dans le main() >>self.mode_tactile_actif = True  # False = Saisie directe clavier PC | True = Ouverture Calculatrice
         self.editing_index = None
         self.copied_entry = None    # ← copie de PointEntry (pour copier/coller)
         self.copied_shape = {"shape": None, "shape_label": None, "shape_params": {}}    # ← copie de shape et shape_params (pour copier/coller uniquement la terminaison)       
@@ -536,7 +731,7 @@ class PointDrawEditor(BoxLayout):
         self.display_rows = []  # list des lignes affichées
 
         # Top bar with toggle button
-        top_bar = BoxLayout(orientation='horizontal', size_hint_y=None, height=80, width = COL_TOTAL_WIDTH, spacing= 5)
+        top_bar = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(70), width = COL_TOTAL_WIDTH, spacing= 5)
 
         self.toggle_mirror = ToggleButton(text=f"{Tr("mirror")} Z: {TR("off")}", state='normal', size_hint=(None,None), height=80, width = COL_TOTAL_WIDTH / 4, pos_hint={'center_y': 0.5})
         self.toggle_mirror.bind(on_press=self.on_toggle_mirror)
@@ -567,6 +762,107 @@ class PointDrawEditor(BoxLayout):
         self.scroll.add_widget(self.display_rows)
         self.add_widget(self.scroll)
 
+        self.refresh()
+#----------------------------------------------
+
+from screen_base.common_screen import BaseScreenLayout
+
+class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
+    def __init__(self, part_points, **kwargs):
+        # 1️⃣ PROPRIÉTÉS ET CONSTANTES GÉOMÉTRIQUES CAO
+        self.points_part = part_points  # instance de PointManager()
+        self.mirror_z = False
+        self.editing_index = None
+        self.copied_entry = None    
+        self.copied_shape = {"shape": None, "shape_label": None, "shape_params": {}}    
+        self.original_entry = None   
+        self.disp_refresh_blocked = False
+
+        # Chargement et initialisation optimisée des données CAO
+        self.points_part.data_loaded = True
+        self.points_part.update_entries_data()
+
+        self.display_rows_list = []  # Renommé pour éviter le conflit avec le widget GridLayout
+        
+        # On appelle le constructeur du châssis parent
+        super().__init__(**kwargs)
+
+    def on_kv_post(self, base_widget):
+        """
+        DÉCLENCHEUR SÉCURISÉ : Clipse la barre d'outils CAO en haut 
+        et le tableau de points dans le corps de droite de manière rectiligne.
+        """
+        # =====================================================================
+        # 🧱 MODULE A : DESSIN DE L'ENTÊTE HAUTE SPÉCIFIQUE CAO
+        # =====================================================================
+        # Remplacement de l'ancien top_bar par un layout adapté au header_zone
+        top_bar = BoxLayout(
+            orientation='horizontal', 
+            size_hint=(1, 1), # Prend 100% de la place du header_zone
+            padding=[dp(15), dp(5), dp(15), dp(5)], 
+            spacing=dp(10)
+        )
+
+        # Bouton Toggle Miroir Normalisé
+        self.toggle_mirror = ToggleButton(
+            text=f"{Tr('mirror')} Z: {TR('off')}", 
+            state='normal', 
+            size_hint=(None, None), 
+            height=dp(50), 
+            width=dp(180), 
+            pos_hint={'center_y': 0.5}
+        )
+        self.toggle_mirror.bind(on_press=self.on_toggle_mirror)
+
+        # Label cliquable du nom de la pièce normalisé
+        part_name_txt = self.points_part.get_part_name()
+        self.part_name_lbl = LabeledCell(
+            text=part_name_txt, 
+            halign='center', 
+            bold=True,
+            bg_color=(0.4, 0.6, 0.4, 0.5),
+            height=dp(50),
+            size_hint=(None, None),
+            width=dp(300),
+            pos_hint={'center_y': 0.5},
+            on_click=self.open_part_popup
+        )
+
+        # Assemblage de l'entête CAO
+        top_bar.add_widget(self.part_name_lbl)
+        top_bar.add_widget(Widget()) # Espaceur élastique central
+        top_bar.add_widget(self.toggle_mirror)
+
+        # =====================================================================
+        # 🧱 MODULE B : DESSIN DU CORPS DE FORMULAIRE (body_zone)
+        # =====================================================================
+        # Conteneur vertical principal pour le tableau de coordonnées
+        corps_cao = BoxLayout(
+            orientation='vertical', 
+            padding=dp(15), 
+            spacing=dp(10)
+        )
+
+        # Ajout de la ligne d'en-tête des colonnes du formulaire (Axes, Deltas, Formes)
+        corps_cao.add_widget(HeaderRow(on_unit_click=self.on_header_unit_click))
+
+        # Zone déroulante (Scroll) pour naviguer dans la liste infinie de points FAO
+        self.scroll = ScrollView(size_hint=(1, 1))
+        
+        # Grille à 1 colonne qui reçoit dynamiquement vos lignes d'InputCell
+        self.display_rows = GridLayout(cols=1, spacing=dp(6), size_hint_y=None)
+        self.display_rows.bind(minimum_height=self.display_rows.setter('height'))
+        
+        self.scroll.add_widget(self.display_rows)
+        corps_cao.add_widget(self.scroll)
+
+        # =====================================================================
+        # 🎯 CLIPSAGE FINAL DANS LE CHÂSSIS PARENT HÉRITÉ
+        # =====================================================================
+        self.injecter_entete_specifique(top_bar)
+        self.injecter_corps_specifique(corps_cao)
+
+        # Lancement du premier rafraîchissement d'affichage du tableau
         self.refresh()
 
     def __del__(self):
@@ -914,3 +1210,20 @@ class PointDrawEditor(BoxLayout):
         content.add_widget(btn)
 
         popup.open()
+
+    # Écran
+    def screen_focused(self):
+        """
+        RÉVEIL INTERNE CAO : Appelée par le main.py quand la page prend le focus.
+        Gère la synchronisation de ses propres onglets et de son tableau.
+        """
+        # 1. On synchronise l'onglet visuel de notre barre d'outils locale
+        if 'tools_bar' in self.ids:
+            tb = self.ids.tools_bar
+            if 'btn_cao' in tb.ids: tb.ids.btn_cao.set_status(1) # CAO brille en vert
+            if 'btn_fao' in tb.ids: tb.ids.btn_fao.set_status(0) # DRO s'éteint
+
+        # 2. Forcer le rafraîchissement complet du tableau de points de la pièce
+        self.refresh()
+        
+        print("[PAGE CAO] Réveil et reconstruction autonome du tableau de points.")

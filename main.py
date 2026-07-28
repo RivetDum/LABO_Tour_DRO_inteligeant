@@ -24,6 +24,7 @@ from kivy.app import App
 from kivy.core.window import Window
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.button import Button
+from kivy.properties import BooleanProperty
 from kivy.clock import Clock
 from i18n import set_language, tr, Tr, TR
 
@@ -34,6 +35,9 @@ ICON_PATH = BITMAPS_DIR / "icone.ico"
 class SmartDroApp(App):
     icon = str(ICON_PATH)
     title = "DRO intelligent"  # Sera traduit dynamiquement dans build()
+
+    # CONTROLE DE SAISIE : False = Clavier PC direct | True = Calculatrice tactile
+    mode_tactile_actif = BooleanProperty(True)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -46,6 +50,7 @@ class SmartDroApp(App):
         
         set_language(USER_LANGAGE)
         self.dro_clock = None  # Référence pour notre tick à 60Hz
+        
 
     def build(self):        
         # Traduction à la volée du titre de la fenêtre au démarrage
@@ -90,8 +95,22 @@ class SmartDroApp(App):
         return self.sm
 
     # --- Logique de Commutation et Horloge Visuelle ---
-    def changer_ecran(self, nom_ecran):
+    def OLD_changer_ecran(self, nom_ecran):
         self.sm.current = nom_ecran
+    def changer_ecran(self, nom_ecran):
+        """
+        GÈRE LE SQUELETTE GLOBAL : Permute l'écran et avertit la page 
+        qu'elle a reçu le focus pour qu'elle gère sa propre synchronisation.
+        """
+        self.sm.current = nom_ecran
+
+        if nom_ecran == "ecran_dro":
+            # On appelle la méthode de réveil interne de la DRO
+            self.dro_manager_instance.screen_focused()
+            
+        elif nom_ecran == "ecran_dessin":
+            # On appelle la méthode de réveil interne de la CAO (Dessin)
+            self.dessin_editor_instance.screen_focused()
 
     def demarrer_horloge_dro(self):
         if not self.dro_clock:

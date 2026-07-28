@@ -37,7 +37,7 @@ class DroApp(App):
         self.part = PointManager()      # Géométrie, contours, points, trajectoires, unités
         self.cutter = CutterManager()   # Outils, diamètres, offsets
         self.machine = MachineState()   # État de la machine (coordonnées, homing, état axes)
-        self.calculator = CommManager(self.machine) # Communication MCU, lecture/synchro temps réel, thread séparé
+        #self.calculator = CommManager(self.machine) # Communication MCU, lecture/synchro temps réel, thread séparé
         
         set_language(USER_LANGAGE)
     

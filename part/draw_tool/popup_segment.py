@@ -4,6 +4,7 @@
 import math
 import copy
 from kivy.uix.popup import Popup
+from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.togglebutton import ToggleButton
@@ -14,9 +15,9 @@ from kivy.uix.spinner import Spinner
 from kivy.uix.dropdown import DropDown
 from kivy.uix.textinput import TextInput
 
-from common_widgets import MyLabel, Separator, GroupHeader, LabeledCell, InputCell, InputCellLabel, CustomSpinner, STATUS_NEUTRE, STATUS_INACTIF, STATUS_ERREUR, STATUS_VALIDE
+from common_widgets import MyLabel, Separator, GroupHeader, LabeledCell, InputCell, InputCellLabel, CustomSpinner, STATUS_NEUTRE, STATUS_INACTIF, STATUS_ERREUR, STATUS_VALIDE, STATUS_TRANSLICIDE
 from i18n import tr, Tr, TR  # La fonction de traduction importée tr>> tel que la traduction; Tr première lettre en majuscule; TR tous en majuscule
-from config import parse_user_input, get_unit_config, get_all_units_for_type, AXIS_CONFIG
+from config import parse_user_input, get_unit_id, get_unit_config, switch_unit, get_all_units_for_type, AXIS_CONFIG
 
 
 class CalculatorPopup(Popup):
@@ -27,204 +28,589 @@ class CalculatorPopup(Popup):
         (l'addition, soustraction, multiplication, divison)
     Vérifie aussi que les valeurs à écrires son dans un format accéptable par le logiciel
     '''
-    def __init__(self, current_value, current_unit, update_value_callback, **kwargs):
+    
+    #BT_VALIDATE = "ENTER" + " ➔  "  # VErsion traducteur: TR("enter") + " ➔  "    # Désignation du bouton de validation de l'oppération en cours
+
+    # 🎨 PALETTE DE COULEURS
+    BRUN_ORANGE   = (0.788, 0.502, 0.024, 1)    # Fonctions mathématiques
+    BLEU_BOUTON   = (0.459, 0.722, 0.969, 1)    # Compléments (+/-, .)
+    GRIS_BOUTON   = (0.812, 0.784, 0.737, 1)    # Chiffres actifs
+    DESACT_BOUTON = (0.220, 0.180, 0.180, 1)    # Inactifs (Bordeaux éteint)
+    VERT_VALIDER  = (0.3, 0.7, 0.3, 1)          # Validation OK
+    ROUGE_ANNULER = (0.8, 0.3, 0.3, 1)          # Correction locale CE
+
+    BUTTONS_COLORS = [      # boutons de la grille de la calculatrice
+        GRIS_BOUTON, GRIS_BOUTON, GRIS_BOUTON, BRUN_ORANGE,
+        GRIS_BOUTON, GRIS_BOUTON, GRIS_BOUTON, BRUN_ORANGE,
+        GRIS_BOUTON, GRIS_BOUTON, GRIS_BOUTON, BRUN_ORANGE,
+        BLEU_BOUTON, GRIS_BOUTON, BLEU_BOUTON, BRUN_ORANGE
+    ]
+
+    def __init__(self, current_value, current_unit, update_value_callback, case_desgn="", **kwargs):
+        kwargs.setdefault('size_hint', (None, None))
+        kwargs.setdefault('size', (600, 250)) # Votre taille de base idéale pour le 400x680        
         super().__init__(**kwargs)
-        self.title = "Modifier la valeur"
-        self.size_hint = (None, None)
-        self.size = (400, 500)
+
+        self.title = f"Modifier la valeur de : {case_desgn}"
         self.update_value_callback = update_value_callback
 
-        # je vais garder tois étages de valeurs:
-        # -1: original_value : Valeur de démarrage pour réinitialisation complète
-        self.original_value = parse_user_input(current_value, current_unit)
-        if isinstance(self.original_value,(str)):
-            # TODO: peut-être juste un popUp de ratrapage pour les non valide ???
-            return f"{current_value} {current_unit}"
-        # -2: result_last: dernier résultat valide, dans l'unité de la dernière oppération
-        self.result_last = self.original_value
-        # -3: result : comme result_last, mais dans l'unité en cours d'utilisation
-        self.result =  self.original_value
-        self.result_str = f"{self.result[0]} {self.result[2]}" # Le résultat pour l'affichage
+        # ─── 1. BLINDAGE ET INITIALISATION DES DONNÉES GÉOMÉTRIQUES ───
+        unit_parsed = get_unit_id(current_unit)
+        if not unit_parsed: unit_parsed = get_unit_id("dist")   # valeur de secour si current_unit inexploitable, utiliser l'unité par défaut de distance !
+        self.unit_list = get_all_units_for_type(unit_parsed, with_labels=True)
+        if not self.unit_list: self.unit_list = [(unit_parsed, unit_parsed)]
+            # Valeurs reçues: STRUCTURES 3 COLONNES
+        self.original_data = parse_user_input(current_value, current_unit)      # -1: Start : Reçues à l'ouverture de la popup, ne bouge jamais
+        if isinstance(self.original_data, str):   # Contrôle du parse failed
+            self.original_data = parse_user_input(current_value, unit_parsed)
+            if isinstance(self.original_data, str):   # Contrôle du parse_2 failed
+                self.original_data = [0.0, unit_parsed, unit_parsed]    # A ce stade original_data à des valeurs exptoitable par la calculation
 
-        # Variables de travail
-        self.unit_list= self.get_all_units_for_type(current_unit, True) # Liste des unitées selctionables [unit_id, unit_label]
-        # TODO: A Renommer
-        self.is_calculating = False  # Stock l'opération en cours ("+ - * /") ou False pour entré direct
+        # ─── 2. VARIABLES POUR LA CALCULATION (STRUCTURES 3 COLONNES) ───
+        self.base_data = copy.deepcopy(self.original_data)      # -2: L'Ancre : Calculs cumulés validés (Verrouillé en unité origine)
+        self.return_data = copy.deepcopy(self.original_data)    # -3: Panier de sortie (Renvoyé au callback final), comme base_data mais en unités actuels.
+        self.input_data = [0.0, self.return_data[1], self.return_data[2]]    # -4: La Saisie (Bloc 3) : Init en unité retour
+        self.preview_data = [self.base_data[0], self.return_data[1], self.return_data[2]] # -5: La Prévisualisation (Bloc 4) Valeur en unit_original et unit_id + unit_lbl en unitée de retour
+            # Relevé des propriétés d'affichage des unités     Returns:{"unit_id": str,"type": str,"factor": float,"decimals": int,"label": strs}
+        self.unit_origine_Property = get_unit_config(self.base_data[1])
+        self.unit_return_Property = get_unit_config(self.return_data[1])
+        self.unit_preview_Property = get_unit_config(self.preview_data[1])
+        self.unit_input_Property = get_unit_config(self.input_data[1])
+            # États et versions textes pour Kivy
+        self.saisie_active = False   # True dès que l'opérateur tape un chiffre (Gère le duel END / CE)
+        self.calcul_validable = False # True uniquement si l'opération peut être validée par la touche (=)
+        self.is_calculating = None  # None pour entrée directe, ou "+", "-", "*", "/"
+        self.operator_text = "Remplacer" if self.is_calculating is None else self.is_calculating # Texte de l'opérateur (Bloc 2)
+        self.input_text = ""        # Version chaîne pour le pavé numérique (Bloc 3)
+        val_transposee = switch_unit(self.preview_data[0], self.base_data[1], self.preview_data[1])
+        self.preview_text = f"{val_transposee[0]:0.{self.unit_preview_Property['decimals']}f} {val_transposee[2]}" 
 
-        # === POUR L'AFFICHAGE ===
+        # ─── 3. ASSEMBLAGE DES ZONES DE L'ÉCRAN ───
+        layout_principal = BoxLayout(size_hint=(1,1), orientation='horizontal', padding=10, spacing=0)
+        self.touches_calculatrice = {} # Dictionnaire pour mémoriser les boutons
 
-        # Label pour afficher la valeur original (original_value)
-        self.old_value_label = Label(text=f"Ancienne valeur: {self.original_value[0]} {self.original_value[2]}")
-
-        # Label pour afficher la valeur actuel, avant calcul (result_last)
-        self.actif_value_label = Label(text=f"Valeur actuel: {self.result_last[0]} {self.result_last[2]}")
-        
-        # TextInput pour afficher la valeur et l'unité En cours de traitement
-        self.clac_input = InputCell(text="", status=STATUS_NEUTRE)
-        #self.calc_input.bind(on_text_validate=self.on_validate)
-        self.calc_input.bind(text=self.on_text_change)
-
-        # Label pour afficher le résultat temporaire après traitement
-        self.new_value_label = Label(text=f"Nouvelle valeur: {self.result[0]} {self.result[2]}")
-        
-        layout = BoxLayout(orientation='vertical')
-        layout.add_widget(self.old_value_label)
-        layout.add_widget(self.actif_value_label)
-        layout.add_widget(Label(text="Entrez la nouvelle valeur:"))
-        layout.add_widget(self.calc_input)
-        
-        # Grille de la calculatrice
-        grid = GridLayout(cols=4, spacing=(5, 6))
-        
-        buttons = ["", "", "CE", "C",
-                   '7', '8', '9', '/',
-                   '4', '5', '6', '*',
-                   '1', '2', '3', '-',
-                   '0', '.', '+/-', '+']
-        
-        BRUN_ORANGE = (0.788, 0.502, 0.024, 1)
-        BLEU_BOUTON = (0.459, 0.722, 0.969, 1)
-        GRIS_BOUTON = (0.812, 0.784, 0.737, 1)
-        bt_color=[
-            None,None,BLEU_BOUTON,BLEU_BOUTON,
-            GRIS_BOUTON,GRIS_BOUTON,GRIS_BOUTON, BRUN_ORANGE,
-            GRIS_BOUTON,GRIS_BOUTON,GRIS_BOUTON, BRUN_ORANGE,
-            GRIS_BOUTON,GRIS_BOUTON,GRIS_BOUTON, BRUN_ORANGE,
-            GRIS_BOUTON,GRIS_BOUTON,BLEU_BOUTON, BRUN_ORANGE]
-        
+       # 1 ═> GAUCHE : LE PAVÉ NUMÉRIQUE  ═══
+        grid_gauche = GridLayout(size_hint_x=0.50, cols=4, spacing=(5, 5))
+        buttons = ['7',  '8',  '9',  '/',      # 'END' <== ici grid_centre (l'autre colonne de boutons)
+                   '4',  '5',  '6',  '*',      # 'C'
+                   '1',  '2',  '3',  '-',      # 'CE'
+                   '+/-','0',  '.',  '+']      # '='
         for i, button in enumerate(buttons):
-            if button == "":
-                grid.add_widget(Label(text=" "))
-            else:
-                btn = Button(
-                    text=button,
-                    on_press=self.on_button_press,
-                    background_normal="",
-                    background_color=bt_color[i] if bt_color[i] else (1, 1, 1, 1)
-                )
-                grid.add_widget(btn)
-
-        layout.add_widget(grid)
-        layout.add_widget(self.new_value_label)
-
-        # Boutons de validation et réinitialisation
-        button_layout = BoxLayout(size_hint=(1, 0.2))
+            btn = Button(text=button, on_press=self.on_button_press, background_normal="", background_color=self.BUTTONS_COLORS[i], background_disabled_normal="", disabled_color=(0.4, 0.4, 0.4, 1),
+                font_size='28sp', bold=True, color=(0.15, 0.15, 0.15, 1))
+            btn.background_color_enabled = btn.background_color; btn.background_color_disabled = self.DESACT_BOUTON # Devient bordeaux éteint si désactivé
+            self.touches_calculatrice[button] = btn
+            grid_gauche.add_widget(btn)
         
-        # Bouton d'unité
-        self.unit_button = Button(text=f"Unité: {self.last_unit}", on_press=self.change_unit, size_hint_y=0.5, background_normal="", background_color=BRUN_ORANGE)
-        # Bouton de réinitialisation (CE)
-        #clear_button = Button(text="CE", on_press=self.clear_input)
-        # Bouton de validation (ou Enter)
-        self.confirm_button = Button(text="Enter", on_press=self.on_validate, size_hint_y=0.5, background_normal="", background_color=BRUN_ORANGE)
-        
-        #button_layout.add_widget(clear_button)
-        button_layout.add_widget(self.unit_button)
-        button_layout.add_widget(self.confirm_button)
-        
-        layout.add_widget(button_layout)
-        self.add_widget(layout)
+        # 3 ═> CENTRE : ACTIONS DE RESETS / VAALIDATIONS ═══
+        grid_centre = GridLayout(size_hint_x=0.125, cols=1, spacing=(5, 5))
+        btn_close = Button(text="END", on_press=self.on_closed, background_normal="", background_color=self.VERT_VALIDER, background_disabled_normal="", disabled_color=(0.4, 0.4, 0.4, 1),
+                font_size='28sp', bold=True, color=(0.15, 0.15, 0.15, 1))
+        btn_close.background_color_enabled = btn_close.background_color;  btn_close.background_color_disabled = self.DESACT_BOUTON
+        btn_c = Button(text="C", on_press=self.on_button_press, background_normal="", background_color=self.ROUGE_ANNULER, background_disabled_normal="", disabled_color=(0.4, 0.4, 0.4, 1),
+                font_size='28sp', bold=True, color=(0.15, 0.15, 0.15, 1))
+        btn_c.background_color_enabled = btn_c.background_color; btn_c.background_color_disabled = self.DESACT_BOUTON
+        btn_ce = Button(text="CE", on_press=self.on_button_press, background_normal="", background_color=self.BRUN_ORANGE, background_disabled_normal="", disabled_color=(0.4, 0.4, 0.4, 1),
+                font_size='28sp', bold=True, color=(0.15, 0.15, 0.15, 1))
+        btn_ce.background_color_enabled = btn_ce.background_color;  btn_ce.background_color_disabled = self.DESACT_BOUTON
+        btn_ok = Button(text="=", on_press=self.on_click_enregistrer_intermediaire, background_normal="", background_color=self.BRUN_ORANGE, font_size='28sp', bold=True, color=(0.15, 0.15, 0.15, 1)) 
+        btn_ok.background_color_enabled = btn_ok.background_color;  btn_ok.background_color_disabled = self.DESACT_BOUTON
+        grid_centre.add_widget(btn_close); self.touches_calculatrice["END"] = btn_close #; btn_close.disabled = False
+        grid_centre.add_widget(btn_c);     self.touches_calculatrice["C"]   = btn_c     # ce seraplus logique d'appeler la fonction de surveillance à la fin du init pour cela ?;    btn_c.disabled = True
+        grid_centre.add_widget(btn_ce);    self.touches_calculatrice["CE"]  = btn_ce    #;    btn_ce.disabled = True
+        grid_centre.add_widget(btn_ok);    self.touches_calculatrice["="]   = btn_ok    #;    btn_ok.disabled = True       
 
-    #TODO: Adapter à on_button_press
-    def on_text_change(self, instance, value):
-        print(f"Dernier texte : {value}")
-        if value:
-            last_char = value[-1]
-            print(f"Dernier caractère saisi : {last_char}")
-            # Tu peux déclencher des actions selon la touche (ex: calcul, validation, etc.)    
+        # 4 ═> DROITE : AFFICHAGE NUM?ERIQUE, ;-) TICKET DE CAISSE ═══
+        box_droite = BoxLayout(orientation='vertical', size_hint_x=0.40, padding=1, spacing=1)
+            # Organisation des box_lignes (largeurs des colonnes)
+        label_hint=0.36; valeur_hint=0.48; unit_hint=0.16; label_font= "16sp"; valeur_font="22sp"; unit_font="18sp"
+                # Ligne 1 : Rappel de la valeur à l'ouverture de la popup
+        droite_l1 = BoxLayout(orientation='horizontal', size_hint_y=0.2, padding=10, spacing=5)
+        old_value_label = MyLabel(text= "Valeur original :", size_hint_x=label_hint, color=(0.6, 0.6, 0.6, 1),font_size=label_font)
+        self.old_value_value = MyLabel(text=f"{self.original_data[0]:0.{self.unit_origine_Property['decimals']}f}", size_hint_x=valeur_hint, bold=True, color=(0.6, 0.6, 0.6, 1), halign="right", font_size=valeur_font)
+        self.old_value_unit = MyLabel(text=f"{self.original_data[2]}", size_hint_x=unit_hint, color=(0.6, 0.6, 0.6, 1), bold=True, halign="right", font_size=unit_font)
+        droite_l1.add_widget(old_value_label); droite_l1.add_widget(self.old_value_value); droite_l1.add_widget(self.old_value_unit)
+        box_droite.add_widget(droite_l1); box_droite.add_widget(Separator(margin=1)); box_droite.add_widget(Separator(margin=1))
+                # Ligne 2 : Dernière valeur valide (valeur retournée + val de départ pour opération)       
+        droite_l2 = BoxLayout(orientation='horizontal', size_hint_y=0.2, padding=10, spacing=5)
+        new_value_label = MyLabel(text="Nouvelle valeur :", size_hint_x=label_hint, color=(0.8, 1.0, 0.8, 1),font_size=label_font)
+        self.new_value_value = MyLabel(text=f"{self.return_data[0]:0.{self.unit_return_Property['decimals']}f}", size_hint_x=valeur_hint, bold=True, color=(0.8, 1.0, 0.8, 1), halign="right", font_size=valeur_font)
+        self.new_value_unit = MyLabel(text=f"{self.return_data[2]}", size_hint_x=unit_hint, color=(0.8, 1.0, 0.8, 1), bold=True, halign="right", font_size=unit_font)
+        droite_l2.add_widget(new_value_label); droite_l2.add_widget(self.new_value_value); droite_l2.add_widget(self.new_value_unit)
+        box_droite.add_widget(droite_l2)
+                # Ligne 3 : désignation de l'opération à calculer 
+        droite_l3 = BoxLayout(orientation='horizontal', size_hint_y=0.2, padding=10, spacing=5)
+        operator_label = MyLabel(text="Signe :", size_hint_x=label_hint, color=(0.6, 0.6, 0.6, 1),font_size=label_font)
+        self.operator_value = MyLabel(text=self.operator_text, size_hint_x=valeur_hint, bold=True, color=(0.6, 0.6, 0.6, 1), halign="right", font_size=valeur_font)
+        self.operator_value.bind(text=self.on_text_change)
+        no_unit = MyLabel(text="", size_hint_x=unit_hint, color=(0.6, 0.6, 0.6, 1), bold=True, halign="right", font_size=unit_font)
+        droite_l3.add_widget(operator_label); droite_l3.add_widget(self.operator_value); droite_l3.add_widget(no_unit)
+        box_droite.add_widget(droite_l3)
+                # Ligne 4 : valeur et unité à utiliser     
+        self.droite_l4 = BoxLayout(orientation='horizontal', size_hint_y=0.2, padding=10, spacing=5)
+        clac_label = MyLabel(text="valeur :", size_hint_x=label_hint, color=(0.6, 0.6, 0.6, 1),font_size=label_font)
+        #self.calc_input = InputCell(text="", status=STATUS_TRANSLICIDE, size_hint_x=valeur_hint, font_size=valeur_font)
+        #self.calc_input = InputCell(text="", status=STATUS_VALIDE, size_hint_x=valeur_hint, font_size=valeur_font)
+        #self.calc_input.foreground_color = (0.6, 0.6, 0.6, 1) # Appliqué après l'init, 100% sécurisé et sans crash !
+        self.calc_input = MyLabel(text="", size_hint_x=valeur_hint, bold=True, color=(0.6, 0.6, 0.6, 1), halign="right", font_size=valeur_font)
+        self.calc_input.bind(text=self.on_text_change)
+        self.calc_spinner = Spinner(text=str(self.return_data[2]), values=[label for uid, label in self.unit_list], size_hint_x=unit_hint, background_normal="", background_color=self.BRUN_ORANGE, font_size=unit_font)
+        # OBSOLETTE: self.calc_spinner.bind(text=self.on_unit_spinner_changed)
+        self.calc_spinner.bind(text=self.on_text_change)
+        self.spinner_placeholder = Widget(size_hint_x=unit_hint)    # 🎯 AJOUT : On crée un widget invisible de remplacement qui a exactement la même taille (unit_hint)
+        self.droite_l4.add_widget(clac_label); self.droite_l4.add_widget(self.calc_input); self.droite_l4.add_widget(self.calc_spinner)
+        box_droite.add_widget(self.droite_l4); box_droite.add_widget(Separator())
+                # Ligne 5 : la prévisualisation du résultat
+        droite_l5 = BoxLayout(orientation='horizontal', size_hint_y=0.5, padding=10, spacing=5)
+        preview_label = MyLabel(text="Résultat :", size_hint_x=label_hint, color=(0.6, 0.6, 0.6, 1),font_size=label_font)
+        self.preview_value = MyLabel(text=f"{self.preview_data[0]:0.{self.unit_preview_Property['decimals']}f}", size_hint_x=valeur_hint, bold=True, color=(0.6, 0.6, 0.6, 1), halign="right", font_size=valeur_font)
+        self.preview_unit = MyLabel(text=f"{self.preview_data[2]}", size_hint_x=unit_hint, color=(0.6, 0.6, 0.6, 1), bold=True, halign="right", font_size=unit_font)
+        droite_l5.add_widget(preview_label); droite_l5.add_widget(self.preview_value); droite_l5.add_widget(self.preview_unit)
+        box_droite.add_widget(droite_l5)
+
+
+        layout_principal.add_widget(grid_gauche)
+        layout_principal.add_widget(Widget(size_hint_x=0.04))    # 2 ═> SCPACEUR : ESPACEUR ENTRE LES DEUX GRILLES DE BOUTONS
+        layout_principal.add_widget(grid_centre)
+        layout_principal.add_widget(Widget(size_hint_x=0.01))    # 2 ═> SCPACEUR : ESPACEUR ENTRE LES DEUX GRILLES DE BOUTONS
+        layout_principal.add_widget(box_droite)
+
+        self.add_widget(layout_principal)
+
+        # ─── FIN DE L'__INIT__ : BRANCHEMENT DU CLAVIER PC (WINDOWS) ───
+        from kivy.core.window import Window    
+        # 🔗 On connecte l'intercepteur de touches physique
+        Window.bind(on_key_down=self._on_keyboard_down)       
+        # 🛡️ SÉCURITÉ : Quand la popup se ferme, on coupe TOUJOURS l'intercepteur 
+        # pour éviter que le clavier ne reste bloqué sur la calculatrice une fois fermée
+        self.bind(on_dismiss=lambda *args: Window.unbind(on_key_down=self._on_keyboard_down))
+
+        
+        self.rafraichir_previsualisation()
+
     def on_button_press(self, instance):
-        current_text = self.calc_input.text.strip()
+        """Gère l'appui sur les touches de la grille et du bouton de reset 'C' tout en haut."""
         button_text = instance.text
         
-        if button_text == "+/-":
-            # Inverser le signe de la valeur
-            self.calc_input *= -1
-        elif button_text == "C":
-            self.clear_input()
-        elif button_text == "CE":
-            self.init_calcul()
-        elif button_text == "=":
-            # Quand "=" est appuyé, on valide le calcul
-            self.on_calcul(None)
-        elif button_text == "ENTER":
-            # Quand "=" est appuyé, on valide la saisie
-            self.on_validate(None)
-        elif button_text in ["+", "-", "*", "/"]:
-            if self.is_calculating is None:
-                self.calc_input.text = f"{button_text} {current_text}"
-                self.confirm_button.text = "="
-            else:
-                self.calc_input.text = f"{button_text}{current_text.split()[-1]}"  # effacer le premier caractère avant d'ajouter le nouveau
-            self.is_calculating = button_text
-        elif button_text == ".":
-            if "." not in current_text.split()[-1]:
-                self.calc_input.text += button_text
-        else:
-            self.calc_input.text += button_text
-    
-    def on_calcul(self, instance):
-        # Appel direct à la fonction parse_user_input_calc pour valider la saisie
-        __val = self.calc_input.text.strip()
-        _val = _val if self.is_calculating is None else _val.split()[-1]
-        val = float(_val)
-        if self.is_calculating == "+":
-            self.result[0] += val
-        elif self.is_calculating == "-":
-            self.result[0] -= val
-        elif self.is_calculating == "*":
-            self.result[0] *= val
-        elif self.is_calculating == "/":
-            self.result[0] /= val
-        else:
-            self.init_calcul()
-            self.calc_input.text = "Oppération pas disponible."
+        # ─── 1. GESTION DE L'ANNULATION GLOBALE (Bouton C hors grille) ───
+        if button_text == "C" or button_text == "Reset":
+            self.base_data = copy.deepcopy(self.original_data)
+            self.return_data = copy.deepcopy(self.original_data)
+            
+            # Mise à jour de la configuration d'unité pour que la ligne 2 retrouve ses décimales d'origine
+            self.unit_return_Property = get_unit_config(self.return_data[1])
+            nb_dec_ret = self.unit_return_Property["decimals"]
+            self.new_value_value.text = f"{self.return_data[0]:0.{nb_dec_ret}f}"
+            self.new_value_unit.text = str(self.return_data[2])
+            
+            self.nettoyer_bloc_saisie()
+            self.rafraichir_previsualisation()
             return
-        
-        result_last = parse_user_input(self.result[0], self.result[2])
-        if isinstance(result_last, str):  # Erreur par ex: en cas de division par 0
-           self.init_calcul() 
-           self.calc_input.text = "Entrée invalide. Réessayez."
-        else:
-            self.result_last = result_last
-            self.actif_value_label.text = f"{self.result_last[0]} {self.result_last[2]}"
-            self.init_calcul()
 
-    def on_validate(self, instance):
-        # Appel direct à la fonction parse_user_input_calc pour valider la saisie
-        parsed_value = parse_user_input(self.calc_input.text, self.result[2])
+        # ─── 2. GESTION DE LA TOUCHE CE (CORRECTION COMMANDE LOCALE) ───
+        elif button_text == "CE":
+            self.nettoyer_bloc_saisie()
+            self.rafraichir_previsualisation()
+            return
+
+        # ─── 3. GESTION DES CHIFFRES (0 à 9) ET SIGNES ───
+        elif button_text in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']:
+            self.input_text += button_text # On ajoute le caractère dans notre variable de texte brute
+            
+        elif button_text == ".":
+            # Si le champ est vide, on force "0." par convention d'atelier
+            self.input_text = "0." if not self.input_text else self.input_text + "."
+                
+        elif button_text == "+/-":
+            if self.input_text:
+                self.input_text = self.input_text[1:] if self.input_text.startswith("-") else "-" + self.input_text
+            else: 
+                self.input_text = "-" # Prêt à recevoir un chiffre négatif
+
+        # ─── 4. GESTION DES OPÉRATEURS MATHÉMATIQUES (+, -, *, /) ───
+        elif button_text in ["+", "-", "*", "/"]:
+            # RÈGLE DE CUMUL CONTEXTUELLE : Si l'opérateur enchaîne un calcul sans presser l'égal intermédiaire,
+            # on fait monter le résultat précédent dans l'Ancre automatiquement pour le laisser continuer.
+            if self.is_calculating is not None and self.input_text:
+                self.on_click_enregistrer_intermediaire(None)
+            
+            self.is_calculating = button_text # Enregistrement de l'opération (Bloc 2)
+            self.operator_value.text = button_text # 🔄 CORRIGÉ : b2_val -> operator_value
+            self.input_text = "" # Le Bloc 3 se vide, prêt pour la suite
+            
+            # 🎯 CONTINUITÉ D'UNITÉ : On force le Spinner à s'aligner sur le texte de l'Ancre (index 2)
+            unite_ancre_texte = self.base_data[2]
+            
+            # 🔄 CORRIGÉ : unit_spinner -> calc_spinner & on_unit_spinner_changed -> on_text_change
+            self.calc_spinner.unbind(text=self.on_text_change)
+            self.calc_spinner.text = str(unite_ancre_texte)
+            self.calc_spinner.bind(text=self.on_text_change)
+            
+            # Mise à jour manuelle des touches (car self.input_text passe à "" sans déclencher on_text_change)
+            self.actualiser_verrouillage_touches()
+            self.rafraichir_previsualisation()
+
+        # ─── 🎯 TRANSFERT DU TEXTE VERS KIVY ───
+        # On injecte la chaîne dans l'InputCell. Cela réveille automatiquement l'événement
+        # on_text_change qui va lancer le pré-calcul et verrouiller les boutons impossibles !
+        if button_text not in ["+", "-", "*", "/"]:
+            self.calc_input.text = self.input_text
+
+    def on_text_change(self, instance, value):
+        """La douane centrale : filtre toutes les entrées et met à jour les registres indexés."""
+        unit_spin_base = None
+        self.saisie_active = False
+
+        # 🎯 CAS 1 : C'est la cellule de saisie (Ligne 4 du Ticket - Chiffres)
+        if instance == self.calc_input:
+            texte_nettoye = value.strip()
+            
+            # Si le texte est incomplet, on passe la valeur pure à None
+            if texte_nettoye in ["", "-", "."]:
+                self.input_data[0] = None
+            else:
+                try:
+                    val_saisie = float(texte_nettoye)
+                    # switch_unit renvoie [val_convertie, unit_id, unit_lbl]
+                    # On convertit de l'unité active du Spinner vers l'unité de l'Ancre
+                    res_switch = switch_unit(val_saisie, self.unit_input_Property["unit_id"], self.base_data[1])
+                    self.input_data[0] = res_switch[0]
+                except ValueError:
+                    self.input_data[0] = None # Sécurité anti-lettre au clavier
+                    self.saisie_active = True
+
+        # 🎯 CAS 2 : C'est le menu déroulant des unités (Ligne 4 du Ticket - Spinner)
+        # ⚠️ NOTE : Pensez à lier votre spinner dans l'__init__ via : self.calc_spinner.bind(text=self.on_text_change)
+        elif instance == self.calc_spinner:
+            #from config import get_unit_id, get_unit_config
+            uid = get_unit_id(value)
+            self.unit_input_Property = get_unit_config(uid)
+            
+            # Mise à jour des tiroirs d'identification de l'unité de saisie
+            self.input_data[1] = self.unit_input_Property["unit_id"]
+            self.input_data[2] = self.unit_input_Property["label"]
+
+            texte_actuel = self.calc_input.text.strip()
+            if texte_actuel in ["", "-", "."]:
+                self.input_data[0] = None
+            else:
+                try:
+                    val_saisie = float(texte_actuel)
+                    res_switch = switch_unit(val_saisie, self.unit_input_Property["unit_id"], self.original_data[1])
+                    self.input_data[0] = res_switch[0]
+                except ValueError:
+                    self.input_data[0] = None
+                    self.saisie_active = True
+
+                # màj du selécteur d'unité
+            if self.is_calculating in ["+","-"]:
+                unit_spin_base = True   # on va utiliser les unité du Spinner
+            else:
+                unit_spin_base = False   # on va utiliser les unité de return_data[1]
+
+        # 🎯 CAS 3 : C'est le texte de l'opérateur (Ligne 3 du Ticket - Signe)
+        # ⚠️ NOTE : Pensez à lier votre étiquette dans l'__init__ via : self.operator_value.bind(text=self.on_text_change)
+        elif instance == self.operator_value:
+            if value == "Remplacer":
+                self.is_calculating = None
+            else:
+                self.is_calculating = value
+
+            # màj du selécteur d'unité
+            if self.is_calculating in ["+","-"]:
+                unit_spin_base = True   # on va utiliser les unité du Spinner
+            else:
+                unit_spin_base = False   # on va utiliser les unité de return_data[1]
         
-        # Si c'est une valeur valide, on appelle la fonction de mise à jour
-        if isinstance(parsed_value, list):
-            self.update_value_callback(parsed_value)
-            self.dismiss()  # Fermer le pop-up
+        if unit_spin_base is not None:
+            last_unit = self.preview_data[1]
+            if unit_spin_base == True:
+                self.preview_data[1], self.preview_data[2], = self.input_data[1], self.input_data[2]
+            else:
+                self.preview_data[1], self.preview_data[2], = self.return_data[1], self.return_data[2]
+            
+            if self.preview_data[1] != last_unit:
+                self.preview_data[0] = switch_unit(self.preview_data[0], last_unit, self.preview_data[1])
+                self.unit_preview_Property = get_unit_config(self.preview_data[1])
+                if self.preview_data[0] is not None:    # on ne touche pas les ERREURs
+                   # self.preview_data[0] = Ici je m'en fous, c'est rafraichir_previsualisation() qui va mettre à jour !
+                    pass
+        
+        if self.input_data[0] is not None or self.is_calculating is not None or self.input_data[1] != self.return_data[1]:
+            self.saisie_active = True
+
+        # 🚀 TOUT EST TRIPLEMENT FILTRÉ : On envoie les structures d'arrière-plan au moteur pur
+        self.rafraichir_previsualisation()
+
+    def rafraichir_previsualisation(self):
+        """Moteur pur : effectue le calcul sur l'index [0] et anime la Ligne 5 du Ticket."""
+        
+        # 1. Initialisation par défaut de votre système de flags centralisé
+        self.calcul_validable = False 
+        
+        # Variables locales pour capturer les textes exacts en cas d'anomalie
+        erreur_msg = "INVALIDE"
+        erreur_print = "Erreur de calculation"
+
+        # 🎯 1. LE GARDE-FOU MAÎTRE (Votre excellente idée d'aiguillage par Flag !)
+        # Si la calculatrice est au repos total,, on nettoie visuellement la Ligne 5
+        if not self.saisie_active:
+            self.input_data[0] = None
+            self.preview_value.text = ""  # Ligne 5 jaune devient parfaitement blanche/vide
+            self.preview_unit.text = ""   # On efface aussi l'étiquette de l'unité
+            self.actualiser_verrouillage_touches() # Le gardien va éteindre le bouton =
+            return # On quitte immédiatement,, pas de calcul sur du vide !
+
+        # 🎯 2. SÉCURITÉ SÉQUENTIELLE SUR LE NONE : On filtre selon l'opérateur en cours
+        if self.input_data[0] is None:
+            # Si on est en train de préparer une addition ou une soustraction,, on laisse passer
+            # pour que la ligne 5 affiche la valeur de départ (Ancre + 0)
+            if self.is_calculating in ["+", "-"]:
+                pass
+            else:
+                # Pour les autres modes (*, /, Remplacer),, si la saisie est à None,, on gèle l'affichage
+                self.preview_value.text = ""
+                self.preview_unit.text = ""
+                self.actualiser_verrouillage_touches()
+                return 
+
+        # 🚀 3. LA CUISINE MATHÉMATIQUE (Sécurisée contre les NoneType de Python)
+        # On utilise une variable locale pour isoler proprement la valeur numérique de saisie
+        val_saisie_safe = self.input_data[0] if self.input_data[0] is not None else 0.0
+
+        if self.is_calculating == "+":
+            self.preview_data[0] = self.base_data[0] + val_saisie_safe
+        elif self.is_calculating == "-":
+            self.preview_data[0] = self.base_data[0] - val_saisie_safe
+        elif self.is_calculating == "*":
+            self.preview_data[0] = self.base_data[0] * val_saisie_safe
+        elif self.is_calculating == "/":
+            # Sécurité Division par Zéro (Uniquement si l'opérateur a tapé un vrai 0.0)
+            if val_saisie_safe == 0.0:
+                self.preview_value.text = "DIV / 0 !"
+                self.preview_unit.text = ""
+                self.actualiser_verrouillage_touches()
+                return
+            self.preview_data[0] = self.base_data[0] / val_saisie_safe
         else:
-            # Sinon, on affiche une erreur à l'utilisateur
-            self.init_calcul() 
-            self.calc_input.text = "Entrée invalide. Réessayez."
+            # Mode "Remplacer" direct par défaut : prend la valeur saisie filtrée
+            self.preview_data[0] = val_saisie_safe
+
+        # 🎯 4. EXTRACTION ET TRANSPOSITION VISUELLE SUR LE TICKET (Ligne 5)
+        try:
+            if self.preview_data[0] is None:
+                erreur_msg = "DONNÉE ABSENTE"
+                erreur_print = "Erreur : preview_data[0] est None"
+                raise ValueError()
+
+            # Appel dans le sens naturel : switch_unit(valeur_brute, depuis_Ancre, vers_Preview)
+            val_transposee = switch_unit(self.preview_data[0], self.base_data[1], self.preview_data[1])
+            
+            # Contrôle strict du type de retour (doit être une liste [val, id, lbl])
+            if not isinstance(val_transposee, list):
+                erreur_msg = f"CONV. IMPOSSIBLE"
+                erreur_print = f"Erreur switch_unit : retour invalide [{val_transposee}]"
+                raise TypeError()
+
+            # Tout est OK : Rafraîchissement des deux labels de votre Ligne 5
+            nb_dec = self.unit_preview_Property["decimals"]
+            self.preview_value.text = f"{val_transposee[0]:0.{nb_dec}f}"
+            self.preview_unit.text = str(val_transposee[2]) # Affiche le libellé exact (mm, in, rpm...)
+            
+            # 🚩 Le calcul s'est terminé sans encombre,, la touche = devient valide !
+            self.calcul_validable = True
+            
+        except (ValueError, TypeError, ZeroDivisionError) as e:
+            # 🛡️ INTERCEPTION UNIQUE ET DÉBOGAGE
+            print(f"[DEBUG_Calculator] ⚠️ {erreur_print} | Détails système : {str(e)}")
+            
+            # On peint le message d'erreur textuel local sur la Ligne 5 du Ticket
+            self.preview_value.text = erreur_msg
+            self.preview_unit.text = "" 
+
+        # 🎯 5. SURVEILLANCE AUTOMATIQUE
+        # Vos drapeaux d'états étant à jour,, le gardien central ré-aligne l'état et la couleur de vos boutons !
+        self.actualiser_verrouillage_touches()
+
+    def actualiser_verrouillage_touches(self):
+        """Gère l'activation physique (disabled) et visuelle (couleur) en fonction des flags maîtres."""
+        texte_saisie = self.calc_input.text.strip()
+
+        # ─── REGLE 1 : Verrouillage des opérateurs mathématiques (+, -, *, /) ───
+        # Si l'opérateur a déjà choisi un signe, on bloque les autres pour éviter la casse syntaxique
+        if self.is_calculating is not None:
+            for op in ["+", "-", "*", "/"]:
+                if op in self.touches_calculatrice:
+                    self.touches_calculatrice[op].disabled = True
+                    self.touches_calculatrice[op].background_color = self.DESACT_BOUTON
+        else:
+            for op in ["+", "-", "*", "/"]:
+                if op in self.touches_calculatrice:
+                    self.touches_calculatrice[op].disabled = False
+                    self.touches_calculatrice[op].background_color = self.BRUN_ORANGE
+
+        # ─── REGLE 2 : Masquage intelligent du Spinner d'unité ───
+        if self.is_calculating in ["*", "/"]:
+            if self.calc_spinner in self.droite_l4.children:        # Si le spinner est encore dans la ligne, on le remplace par le vide
+                self.droite_l4.remove_widget(self.calc_spinner)
+                self.droite_l4.add_widget(self.spinner_placeholder)
+        else:
+            if self.spinner_placeholder in self.droite_l4.children:    # Si c'est le placeholder qui est présent, on remet le spinner fonctionnel
+                self.droite_l4.remove_widget(self.spinner_placeholder)
+                self.droite_l4.add_widget(self.calc_spinner)
+
+        # ─── REGLE 3 : Verrouillage du point décimal ───
+        if "." in texte_saisie:
+            if "." in self.touches_calculatrice:
+                self.touches_calculatrice["."].disabled = True
+                self.touches_calculatrice["."].background_color = self.DESACT_BOUTON
+        else:
+            if "." in self.touches_calculatrice:
+                self.touches_calculatrice["."].disabled = False
+                self.touches_calculatrice["."].background_color = self.BLEU_BOUTON
+
+        # ─── REGLE 4 : VOS FLAGS MAÎTRES SUR LES BOUTONS D'ACTION (C, CE, =, END) ───
+        btn_c = self.touches_calculatrice.get("C")
+        btn_ce = self.touches_calculatrice.get("CE")
+        btn_egal = self.touches_calculatrice.get("=")
+        btn_close = self.touches_calculatrice.get("END")
+        # Le Reset global (C) s'allume UNIQUEMENT si l'Ancre a dévié de la valeur originale
+        if btn_c:
+            ancre_a_change = self.original_data[0] != self.base_data[0]
+            btn_c.disabled = not ancre_a_change
+            btn_c.background_color = self.ROUGE_ANNULER if ancre_a_change else self.DESACT_BOUTON            
+        # Le Reset partiel (CE) s'allume uniquement si une saisie brute est en cours d'écriture
+        if btn_ce:
+            btn_ce.disabled = not self.saisie_active
+            btn_ce.background_color = self.BRUN_ORANGE if self.saisie_active else self.DESACT_BOUTON           
+        # Le bouton de fermeture (END) se verrouille si une saisie est en cours pour forcer une décision
+        if btn_close:
+            btn_close.disabled = self.saisie_active
+            btn_close.background_color = self.DESACT_BOUTON if self.saisie_active else self.VERT_VALIDER
+        # La touche de calcul [=] obéit au flag de calculabilité du moteur mathématique
+        if btn_egal:
+            btn_egal.disabled = not self.calcul_validable
+            btn_egal.background_color = self.BRUN_ORANGE if self.calcul_validable else self.DESACT_BOUTON
+
+    def on_click_enregistrer_intermediaire(self, instance=None):
+        """
+        Déclenchée par la touche (=). Fait monter le calcul validé de la ligne 5 (Aperçu)
+        vers la ligne 2 (Nouvelle valeur de base) et réinitialise le bloc de saisie.
+        """
+        # Sécurité : Si le drapeau maître dit que ce n'est pas validable, on rejette l'action
+        if not self.calcul_validable or self.preview_data[0] is None:
+            return
+
+        # ─── 1. TRANSFERT MAÎTRE DES REGISTRES D'ARRIÈRE-PLAN ───
+        # Le résultat calculé devient la nouvelle Ancre de calcul (exprimée dans l'unité d'origine)
+        self.base_data[0] = self.preview_data[0]
         
-    def change_unit(self, instance):
-        # Changer l'unité en mode édition
-        unit_ids = [u[0] for u in self.unit_list]    # Extraire la liste des unit_id (colonne [0])
-        current_index = unit_ids.index(self.result[1])    # Trouver l'index de l'unité actuelle
-        next_unit = self.unit_list[(current_index + 1) % len(self.unit_list)]  # Passer à l'unité suivante
-        # convertir result_ avec la nouvelle unitée
-        self.result = self.switch_unit(self.result_last[0], self.result_last[1],next_unit)
-        # Rafraichir l'affichage
-        self.result_str = f"{self.result[0]} {self.result[2]}"
-        self.new_value_label.text = self.result_str
-        
-    def init_calcul(self):
-        self.result = self.result_last
-        self.actif_value_label.text = f"{self.result_last[0]} {self.result_last[2]}"
-        self.calc_input.text = ""
+        # Le panier de sortie (return_data) prend la même valeur numérique, mais dans l'unité à retourner
+        self.return_data = switch_unit(self.preview_data[0], self.base_data[1], self.preview_data[1])
+        self.unit_return_Property = get_unit_config(self.return_data[1])
+
+        # ─── 2. MISE À JOUR STRATÉGIQUE DES TEXTES DU TICKET (Lignes 2 & 3) ───
+        # Ligne 2 : On formate la nouvelle valeur de base avec ses décimales et son unité
+        nb_dec_ret = self.unit_return_Property["decimals"]
+        self.new_value_value.text = f"{self.return_data[0]:0.{nb_dec_ret}f}"
+        self.new_value_unit.text = str(self.return_data[2])
+
+        # Ligne 3 : L'opération est consommée, on nettoie le signe
         self.is_calculating = None
+        self.operator_value.text = "Remplacer"
 
-    def clear_input(self, instance):
-        # Réinitialiser l'entrée (similaire à "CE")
-        self.result_last = self.original_value
-        self.result = self.result_last_value
-        self.actif_value_label.text = f"{self.result_last[0]} {self.result_last[2]}"
-        self.init_calcul()
+        # ─── 3. NETTOYAGE EN CASCADE ET RÉALIGNEMENT DES FLAGS MAÎTRES ───
+        # Cette fonction s'occupe de repasser l'opérateur à "Remplacer", de vider les inputs
+        self.nettoyer_bloc_saisie()
 
+    def nettoyer_bloc_saisie(self):
+        """
+        Fonction mutualisée pour CE et la fin de calcul (=).
+        Utilise la cascade naturelle des événements Kivy dans un ordre 
+        strictement sécurisé pour l'atelier.
+        """
+        # 1. 🛡️ SÉCURITÉ MAXIMUM : On coupe immédiatement l'opérateur mathématique.
+        self.operator_value.text = "Remplacer"    # En repassant en mode "Remplacer", on désactive instantanément les risques liés à la division.
+
+        # 2. 🧹 NETTOYAGE NUMÉRIQUE : On vide l'écran ET la mémoire tampon du pavé numérique.
+        self.input_text = self.calc_input.text = ""
+
+        # 3. 🎯 HARMONISATION : On remet l'unité du Spinner au propre en dernier.
+        self.calc_spinner.text = str(self.return_data[2])
+
+    def on_closed(self, instance):
+        """
+        Gère la fermeture finale (Bouton END/OK).
+        Transmet un dictionnaire complet (Texte, Float, Unité) au callback de la CAO.
+        """
+        # 🛡️ Blindage de sécurité : On s'assure que return_data est exploitable
+        if not self.return_data or self.return_data[0] is None:
+            self.dismiss()
+            return
+
+        try:
+            # 1. Préparation du texte formaté avec les décimales dynamiques
+            dec = self.unit_return_Property.get('decimals', 2)
+            val_formatee = f"{self.return_data[0]:0.{dec}f}"
+            chaine_cao_retour = f"{val_formatee}{self.return_data[2]}" # Ex: "50.80mm"
+            
+            # 🎯 LE PACK COMPLET : On prépare les 4 informations pour la CAO
+            pack_data = {
+                "text": chaine_cao_retour,           # La chaîne formatée (ex: "50.80mm")
+                "value": float(self.return_data[0]), # Le float pur (ex: 50.8)
+                "unit_id": self.return_data[1],      # L'ID technique (ex: "dist")
+                "unit_label": self.return_data[2]    # Le label d'affichage (ex: "mm")
+            }
+            
+            # 2. Envoi du dictionnaire complet au moteur de la CAO
+            if self.update_value_callback:
+                self.update_value_callback(pack_data)
+                
+        except Exception as e:
+            print(f"[DEBUG_Calculator] ⚠️ Erreur lors du packaging CAO : {str(e)}")
+            
+        # 3. Fermeture et déverrouillage de l'interface
+        self.dismiss()
+
+    def _on_keyboard_down(self, window, key, scancode, codepoint, modifiers):
+        """Intercepte les touches du vrai clavier PC et simule un appui tactile."""
+        # déjà en entête de fichier: from kivy.uix.button import Button
+
+        # Dictionnaire complet : Opérateurs ET Chiffres du pavé numérique
+        TRADUCTION_WINDOWS = {
+            # Opérateurs (Pavé numérique et clavier principal)
+            43: '+', 42: '*', 47: '/', 46: '.', 45: '+/-', 269: '+/-',    # 45: '-'
+            # Chiffres du pavé numérique (NumLock activé)
+            256: '0', 257: '1', 258: '2', 259: '3', 260: '4',
+            261: '5', 262: '6', 263: '7', 264: '8', 265: '9',
+            266: '.' # Point/Virgule du pavé numérique
+        }
+        caractere = None
+
+        # 1. On vérifie d'abord si la touche pressée est une touche physique connue (Pavé numérique / Opérateur)
+        if key in TRADUCTION_WINDOWS:
+            caractere = TRADUCTION_WINDOWS[key]            
+        # 2. Si ce n'est pas le cas, on se rabat sur le codepoint (Chiffres du clavier principal)
+        elif codepoint in ['0','1','2','3','4','5','6','7','8','9','.']:
+            caractere = codepoint
+        # 13 = Touche Entrée (clavier principal), 271 = Touche Entrée (Pavé numérique)
+        elif key in [13, 271]: 
+            self.on_click_enregistrer_intermediaire()
+            return True
+        # 27 = Touche Échap / Escape (ferme la popup sans valider)
+        elif key == 27: 
+            self.on_closed(None)
+            return True
+        # 8 = Backspace / Retour arrière, 127 = Delete / Suppr (Simule la touche CE)
+        elif key in [8, 127]:
+            caractere="CE"
+        
+        # 3. Si on a intercepté un caractère valide, on l'envoie à votre méthode tactile
+        if caractere:
+            self.on_button_press(Button(text=caractere))
+            return True
+            
+        return False
 
 class SegmentPopupContent(BoxLayout):
     """

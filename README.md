@@ -63,7 +63,7 @@ Ce projet est une application Kivy permettant la création de dessins techniques
     │ ├─v draw_pnt_manager.py   # Gestion des coordonées de dessin et du fichier de sauvegarde (draw_point.json)
     │ ├─^ draw_point.json       # Fichier de sauvegarde (liste de points, segments)
     │ ├── profil_machine_actif.json # Save profile à usiner partagé avec la machine (voir reel_time/machine_mcu.py)
-    │ ├── draw_form.py          # Vue principale pour l’affichage graphique
+    │ ├── draw_form.py          # Vue principale pour l’affichage graphique. "Formulaire de CAO"
     │ ├── __init__.py           # Initialise le package part
     │ ├── draw_tool/            # Outils annexes (fenêtres modales, etc.)
     │ | ├── popup_segment.py        # Popup pour définir la longueur ou l’angle

@@ -301,15 +301,16 @@ class ThreadReliefISOShape(BaseShape):
         A = self.point_c if dir_c else self.point_a
         C = self.point_a if dir_c else self.point_c
         entities.append({"type":"l", "start":A, "end":pnt3, "color":th_drl["liaison"]})
-        entities.append({"type":"l", "start":pnt3, "end":pnt2, "color":th_drl["detail"]})
         conge = cd.create_fillet(point_before=pnt3, point_intersect=pnt2, point_after=pnt1, radius=radius, dict_formated_auto=True)
         conge["color"] = th_drl["detail"]
+        entities.append({"type":"d", "start":pnt3, "end":conge["start"], "color":th_drl["detail"], "vec_dir":[pnt2[0]-pnt3[0],pnt2[1]-pnt3[1]]})
         entities.append(conge)
         entities.append({"type":"l", "start":pnt2, "end":pnt1, "color":th_drl["detail"]})
         conge = cd.create_fillet(point_before=pnt2, point_intersect=pnt1, point_after=ref_abs, radius=radius, dict_formated_auto=True)
         conge["color"] = th_drl["detail"]
         entities.append(conge)
-        entities.append({"type":"l", "start":pnt1, "end":ref_abs, "color":th_drl["detail"]})
+        #entities.append({"type":"l", "start":pnt1, "end":ref_abs, "color":th_drl["detail"]})
+        entities.append({"type":"d", "start":conge["end"], "end":ref_abs, "color":th_drl["detail"], "vec_dir":[ref_abs[0]-pnt1[0],ref_abs[1]-pnt1[1]]})
         entities.append({"type":"l", "start":ref_abs, "end":C, "color":th_drl["liaison"]})
         
         # Initialisation de draw_part (pour le dessin de la pièce)

@@ -141,8 +141,6 @@ class BaseShape:
         Cette méthode peut être appelée par les classes soeure après chaque calcul de géométrie.
         Version 2.0 : Utilise l'unique ProfilCanvas avec aiguillage étanche par calques.
         """
-        # déjà inisialisé ==>from kivy.uix.label import Label
-        # déjà inisialisé ==>from kivy.uix.floatlayout import FloatLayout
 
         # 1. Efface les anciens widgets (le Label d'alerte ou FloatLayout précédent)
         self.box_draw_shape.clear_widgets()

@@ -125,8 +125,7 @@
 
 <DroHeader>:
     orientation: "horizontal"
-    size_hint_y: None
-    height: 120
+    size_hint_y: 1
     spacing: 20
     padding: [15, 18, 15, 20]
     canvas.before:
@@ -144,43 +143,20 @@
         axe_ident: "hor3"
     AxisBox:    # Y
         id: header_sup
-        axe_ident: "sup"
+        axe_ident: "s"
 
-<DroToolBar>:
-    orientation: "vertical"
-    size_hint_y: 1
-    size_hint_x: None
-    width: 180
-    #orientation: "horizontal"
-    #size_hint_y: None
-    #size_hint_x: 1
-    #height: 120
-    canvas.before:
-        Color:
-            rgba: 0.15, 0.25, 0.15, 1
-        Rectangle:
-            pos: self.pos
-            size: self.size
-    Label:
-        text: "⚙️ Menu"
-    Label:
-        text: "📐 Réglages"
-    Button:
-        text: "📐 Réglages"
-    Label:
-        text: "🧰 Outils"
-    Label:
-        text: "📈 Graph"
 
 <DroDro>:
     orientation: "horizontal"
     spacing: 10
+    height: dp(150)
 
     # Gauche : axes
     BoxLayout:
         id: dro_dim
         orientation: "vertical"
         size_hint_y: 1
+        size_hint_x: 0.7
         padding: 0,30
         spacing: 0
         canvas.before:
@@ -193,10 +169,8 @@
         BoxLayout:
             id: dro_axes_l1
             orientation: "horizontal"
-            size_hint_x: None
             size_hint_x: 1
-            size_hint_y: None
-            height: 110
+            size_hint_y: 1
             spacing: 30
             padding: [10, 20] # → marge horizontale / verticale
 
@@ -251,7 +225,7 @@
         id: dro_compl
         orientation: "vertical"
         size_hint_y: 1
-        size_hint_x: 0.4
+        size_hint_x: 0.3
         canvas.before:
             Color:
                 rgba: 0.1, 0.1, 0.3, 1
@@ -271,28 +245,107 @@
             text: "📝 Log : OK"
 
 <DroGraph>:
-    canvas.before:
-        Color:
-            rgba: 0.05, 0.05, 0.1, 1
-        Rectangle:
-            pos: self.pos
-            size: self.size
+    orientation: 'vertical' # BoxLayout principal à 1 seule case géante
+    padding: 0
+    spacing: 0
+    size_hint: (1, 1)
 
-<DroManager>:
-    orientation: "vertical"
-    #orientation: "horizontal"
-    DroHeader:
-        id: header_box
-    BoxLayout:
-        orientation: "horizontal"
-        DroToolBar:
-            id: bartool_box
+    FloatLayout:
+        id: zone_globale          # 🎯 ID ajouté pour l'accès Python
+        size_hint: (1, 1)
 
+        # (L'axe sera injecté ici via Python, tout en bas de la pile)
+
+        # 🛡️ SOUS-COUCHE A : Dessins (100% de l'écran)
+        StencilView:
+            id: zone_decoupe
+            size_hint: (1, 1)
+            pos: self.parent.pos
+
+        # 🧱 SUR-COUCHE B : Le tuteur de l'IHM
         BoxLayout:
-            orientation: "vertical"
-            DroDro:
-                id: dro_box
+            orientation: 'horizontal'
+            size_hint: (1, 1)
+            pos: self.parent.pos
+
+            # 🖱️ CASE GAUCHE (75%) : Simple BoxLayout standard pour le repère de taille et la zone tactile
+            BoxLayout:
+                id: box_calcul_gauche
+                size_hint_x: 0.85
                 size_hint_y: 1
-            DroGraph:
-                id: graph_box
-                size_hint_y: 2
+
+            # 🎛️ CASE DROITE (25%) : Le panneau fumé
+            BoxLayout:
+                id: box_interface_droite
+                size_hint_x: 0.15
+                size_hint_y: 1
+                orientation: 'vertical'
+                padding: 15
+                spacing: 15
+                canvas.before:
+                    Color:
+                        rgba: 0.05, 0.05, 0.1, 0.75
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+
+                
+                # LABEL DU NOM DE PIÈCE CAO actuellement sélectionée/dessinée
+                Label:
+                    text: "Pièce CAO:"
+                    bold: False
+                    font_size: '12sp'       # Taille normalisée pour ton panneau de droite
+                    halign: 'left'
+                    valign: 'middle'
+                    size_hint_y: None
+                    height: dp(12)          # Hauteur bridée en pixels normalisés
+                    text_size: self.size    # Verrouille le centrage strict de Kivy
+                Label:
+                    id: part_name_lbl
+                    # On va chercher la méthode de ton PointManager stocké dans SmartDroApp
+                    text: app.part.get_part_name() if hasattr(app, 'part') else "SANS NOM"
+                    bold: True
+                    font_size: '14sp'       # Taille normalisée pour ton panneau de droite
+                    halign: 'right'
+                    valign: 'top'
+                    size_hint_y: None
+                    height: dp(20)          # Hauteur bridée en pixels normalisés
+                    text_size: self.size    # Verrouille le centrage strict de Kivy
+                
+                # LABEL DU NOM DE PIÈCE FAO actuellement sélectionée/dessinée
+                Label:
+                    text: "Pièce FAO:"
+                    bold: False
+                    font_size: '12sp'       # Taille normalisée pour ton panneau de droite
+                    halign: 'left'
+                    valign: 'middle'
+                    size_hint_y: None
+                    height: dp(12)          # Hauteur bridée en pixels normalisés
+                    text_size: self.size    # Verrouille le centrage strict de Kivy
+                Label:
+                    id: part_fao_name
+                    text: "Ajouter la cible"
+                    bold: True
+                    font_size: '14sp'       # Taille normalisée pour ton panneau de droite
+                    halign: 'right'
+                    valign: 'top'
+                    size_hint_y: None
+                    height: dp(20)          # Hauteur bridée en pixels normalisés
+                    text_size: self.size    # Verrouille le centrage strict de Kivy
+
+                # 🎯 LE RESSORT D'ATELIER (Widget élastique)
+                # Il va absorber tout le vide disponible verticalement pour "plaquer" tes textes en haut
+                Widget:
+                    size_hint_y: 1
+
+                Button:
+                    text: "Zoom Plein Cadre\n(Pièce)"
+                    halign: 'center'
+                    on_press: root.zoom_all_in_piece()
+                
+                Button:
+                    text: "Recentrer\n(Sur Burin)"
+                    halign: 'center'
+                    on_press: root.declencher_recentrage(ratio=[0.5,0.5])
+              # ... Vos boutons restent ici ...
+

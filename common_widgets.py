@@ -6,11 +6,13 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.behaviors import ButtonBehavior
+from kivy.uix.togglebutton import ToggleButtonBehavior
 from kivy.properties import ObjectProperty
 #from kivy.uix.spinner import Spinner, SpinnerOption, SpinnerDropdown
 from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.dropdown import DropDown
-from kivy.graphics import Color, Rectangle
+from kivy.graphics import Color, Rectangle, RoundedRectangle
+
 from kivy.metrics import dp
 from kivy.clock import Clock
 from kivy.core.window import Window
@@ -20,6 +22,14 @@ STATUS_NEUTRE  = 0
 STATUS_INACTIF = 1
 STATUS_ERREUR  = 2
 STATUS_VALIDE  = 3
+STATUS_TRANSLICIDE = 4
+
+# Constantes de statut d'onglets de bouton
+BTN_NEUTRE   = 0   # Bouton standard d'usine (Gris/Vert sombre)
+BTN_ACTIF    = 1   # Onglet actuellement sélectionné / enfoncé (Vert flashy)
+BTN_INACTIF  = 2   # Fonction non disponible ou bridée (Gris/Vert très sombre)
+BTN_ALARME   = 3   # Alerte machine ou attention requise (Orange/Rouge saumon)
+
 
 class MyLabel(Label):
     """Label personnalisé avec alignement automatique et support du markup."""
@@ -143,7 +153,7 @@ class LabeledToggleCell(LabeledCell):
         )
 
     def refresh_style(self):
-        """Met à jour le style en fonction de l’état courant."""
+        """Met à jour le style en fonction de l'état courant."""
         bg = self.bg_colors.get(self.state, self.off_state["bg"])
         fg = self.fg_colors.get(self.state, self.off_state["fg"])
         txt = self.text_states.get(self.state, self.off_state["text"])
@@ -180,7 +190,7 @@ class LabeledToggleCell(LabeledCell):
             self.refresh_style()
 
     def toggle_up_state(self, *_):
-        """Change d’état en boucle (1 → 2 → ... → 1)."""
+        """Change d'état en boucle (1 → 2 → ... → 1)."""
         was_off = (self.state == 0)
         num_states = len(self.states) - 1
 
@@ -334,7 +344,7 @@ class HoverLabel(Label):
         self.bg_rect.size = self.size
         self.bg_rect.pos = self.pos
 
-class InputCell(TextInput):
+class OLD_InputCell(TextInput):
     STATUS_COLORS = {
         STATUS_NEUTRE:  (1, 1, 1, 0.85),        # blanc doux
         STATUS_INACTIF: (0.75, 0.75, 0.75, 1),  # gris clair
@@ -382,6 +392,76 @@ class InputCell(TextInput):
     def on_focus(self, instance, value):
         if value:
             Clock.schedule_once(lambda dt: instance.select_all(), 0.2)
+class InputCell(TextInput):
+    # Déclaration de vos constantes de statut en haut de fichier (rappel)
+    # STATUS_NEUTRE = 0, STATUS_INACTIF = 1, etc.
+    # STATUS_TRANSLICIDE = 4  # Votre nouvelle constante
+
+    STATUS_COLORS = {
+        STATUS_NEUTRE:      (1, 1, 1, 0.85),        # blanc doux
+        STATUS_INACTIF:     (0.75, 0.75, 0.75, 1),  # gris clair
+        STATUS_ERREUR:      (1, 0.5, 0.5, 1),       # rouge clair
+        STATUS_VALIDE:      (0.6, 1, 0.6, 1),       # vert clair
+        STATUS_TRANSLICIDE: (0, 0, 0, 0),           # 🎯 Transparent pur comme un Label
+    }
+
+    def __init__(self, text, status=STATUS_NEUTRE, size_hint_x = None, width=180, halign = 'right', **kwargs):
+        super().__init__(**kwargs)
+        self.text = text
+        self.status = status
+        self.def_back_color = self.STATUS_COLORS[STATUS_NEUTRE]
+        
+        if size_hint_x is not None:
+            self.size_hint_x = size_hint_x
+        else:
+            self.size_hint_x = None
+            if width is not None:
+                self.width = width
+                
+        self.padding = (10, 1)
+        self.multiline = False
+        self.write_tab = False
+        self.halign = halign
+        self.valign = 'middle'
+        self.text_size = (self.width, None)
+        self.foreground_color = (0, 0, 0, 1)
+
+        # 🎯 DÉCLENCHEMENT INITIAL : La méthode set_status va configurer l'arrière-plan dès le départ
+        self.set_status(status)
+        self.bind(focus=self.on_focus)
+        self.bind(height=self._update_padding)
+
+    def _update_padding(self, *args):
+        font_height = self.line_height  # Hauteur d'une ligne de texte
+        vertical_padding = max((self.height - font_height) / 2, 0)
+        self.padding = [10, vertical_padding]
+
+    def set_status(self, status=None):
+        """Met à jour le statut et applique dynamiquement les masques de textures."""
+        self.status = STATUS_NEUTRE if status is None else status
+        
+        # 🎯 LE DÉCLENCHEUR D'EFFACEMENT (Votre intuition géniale !)
+        if self.status == STATUS_TRANSLICIDE:
+            # Si on demande du translucide, on vide les textures pour libérer le canal Alpha à 0
+            self.background_normal = ""
+            self.background_active = ""
+            self.background_disabled_normal = ""
+        else:
+            # Sinon, on laisse Kivy utiliser ses images d'usine pour garder le joli relief des cases de saisie
+            # Si vous aviez des images spécifiques (ex: "atlas://data/images/defaulttheme/textinput"), remettez-les ici.
+            # En laissant Kivy gérer, il ré-applique les valeurs par défaut du framework si on change de statut.
+            pass
+
+        # Récupération et application de la couleur associée dans votre dictionnaire
+        color = self.def_back_color if status is None else self.STATUS_COLORS.get(self.status, (1, 1, 1, 1))
+        self.background_color = color
+
+    def get_status(self):
+        return self.status
+
+    def on_focus(self, instance, value):
+        if value:
+            Clock.schedule_once(lambda dt: instance.select_all(), 0.2)
 
 class InputCellLabel(InputCell):
     def __init__(self, label_text, *args, **kwargs):
@@ -417,6 +497,71 @@ class InputCellLabel(InputCell):
             return super().on_touch_down(touch)
         return False
 
+
+
+class MenuButton(ToggleButtonBehavior, Label):
+    STATUS_COLORS = {
+        BTN_NEUTRE:   (0.2, 0.35, 0.2, 1),    # Vert d'ambiance d'origine
+        BTN_ACTIF:    (0.3, 0.6, 0.3, 1),     # Vert plus flashy (sélectionné / enfoncé)
+        BTN_INACTIF:  (0.12, 0.15, 0.12, 1),  # Gris éteint et bloqué
+        BTN_ALARME:   (1, 0.5, 0.3, 1),       # Orange/Rouge d'alerte
+    }
+
+    # 🎯 TRICHE UNIFIÉE : On ajoute is_toggle=False par défaut
+    def __init__(self, text="", status=BTN_NEUTRE, is_toggle=False, **kwargs):
+        super().__init__(**kwargs)
+        
+        self.text = text
+        self.bold = True
+        self.halign = "center"
+        self.valign = "middle"
+        self.is_toggle = is_toggle  # Sauvegarde de ta manette de contrôle
+
+        # Création du fond RoundedRectangle opaque
+        with self.canvas.before:
+            self.canvas_bg_color = Color(0, 0, 0, 1)
+            self.canvas_bg_rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(4)])
+        
+        # Attaches géométriques et de texte
+        self.bind(pos=self._update_canvas_geometry, size=self._update_canvas_geometry)
+        self.bind(size=lambda inst, size: setattr(inst, 'text_size', size))
+        
+        # Écoute de l'état Kivy pour changer la couleur automatiquement
+        self.bind(state=self._on_state_changed)
+        
+        self.set_status(status)
+
+    def _update_canvas_geometry(self, *args):
+        self.canvas_bg_rect.pos = self.pos
+        self.canvas_bg_rect.size = self.size
+
+    def _on_state_changed(self, instance, state):
+        """Bascule la couleur du fond dès que Kivy change l'état du Toggle."""
+        self.set_status(self.status)
+
+    def set_status(self, status=BTN_NEUTRE):
+        """Applique la couleur selon le statut ou l'enfoncement."""
+        self.status = status
+        self.disabled = True if self.status == BTN_INACTIF else False
+
+        # Si le bouton est enfoncé (down), il prend la couleur active
+        if self.state == 'down':
+            color = self.STATUS_COLORS[BTN_ACTIF]
+        else:
+            color = self.STATUS_COLORS.get(self.status, self.STATUS_COLORS[BTN_NEUTRE])
+            
+        self.canvas_bg_color.rgba = color
+
+    # =====================================================================
+    # 🎯 LE SECRET DE LA TRICHE : LE RETOUR AUTOMATIQUE A L'ÉTAT INITIAL
+    # =====================================================================
+    def on_release(self):
+        """Déclenché quand l'opérateur relâche le clic."""
+        # Si ce bouton n'est PAS un vrai interrupteur permanent (is_toggle est False)
+        if not self.is_toggle:
+            # On force le bouton à se relâcher immédiatement tout seul !
+            self.state = "normal"
+        return super().on_release()
 
 class CustomSpinnerOption(SpinnerOption):
     def on_parent(self, instance, parent):

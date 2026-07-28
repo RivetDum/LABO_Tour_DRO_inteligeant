@@ -110,12 +110,13 @@ class CommManager():
         # 4. Le verdict du boot est tombé. 
         # Si on doit travailler en ligne, on allume officiellement le thread permanent à 300Hz !
         # TODO: Ci-dessous peut-être un doublon avec la fin de "start_receved_mcu()" ?
-        if self.machine.mcu_en_ligne_derniere_session or self.machine.mode_reprise_crash:
-            # On relance comm_mcu_on avec lancer_thread=True par défaut
-            self.comm_mcu_on() # TODO: Manque un lanceur d'envois de messages dans cette fonction qui de vrais appeler "ordonnanceur_emission_120hz" en boucle de 120Hz
-        else:
+        #if self.machine.mcu_en_ligne_derniere_session or self.machine.mode_reprise_crash:
+        #    # On relance comm_mcu_on avec lancer_thread=True par défaut
+        #    self.comm_mcu_on() # TODO: Manque un lanceur d'envois de messages dans cette fonction qui de vrais appeler "ordonnanceur_emission_120hz" en boucle de 120Hz
+        #else:
             # Si le JSON demandait explicitement du hors-ligne ou si le boîtier est éteint
-            self.comm_mcu_off()
+        #    self.comm_mcu_off()
+        self.comm_mcu_off()
     
     def comm_mcu_on(self, lancer_thread=True):
         """Ouvre proprement les connexions matérielles et gère l'allumage du Thread de croisière."""
@@ -264,6 +265,7 @@ class CommManager():
             self.start_comm = False  # Libère le démarrage pour ouvrir l'IHM
             
             # On vérifie si la dernière session était configurée en mode Hors ligne / Dessin autonome
+            '''DEBUG TODO: Masqué temporairement
             if not self.machine.mcu_en_ligne_derniere_session:
                 print("[BOOT] 📲 Mode Hors ligne détecté dans le JSON -> Coupures des canaux physiques.")
                 # comm_mcu_off ferme l'USB, le réseau et bascule mcu_en_ligne à False proprement
@@ -278,7 +280,7 @@ class CommManager():
                 if mcu_ident == "normal":
                     print("[BOOT] 🟢 DÉMARRAGE À FROID CONFIRMÉ. Envoi de la trame d'initialisation (ID 31).")
                     self.forcer_coordonnees_json_vers_mcu()
-
+            '''
     def boucle_lecture_300hz(self):
         """ 
         Cette fonction tourne en boucle en arrière-plan à 300Hz 

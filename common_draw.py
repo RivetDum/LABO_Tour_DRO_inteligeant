@@ -559,7 +559,7 @@ class ProfilCanvas(Widget):
         self.auto_scale = True if scale is None else False  # Utiliser le zoom automatique en fonction de la taille de la box
         self.auto_scale_entities_def = "defCode AB" # = "A et/ou B" les list[_entities] à utiliser par défaut
         self.auto_scale_entities_last = self.auto_scale_entities_def # Valeur de la dernière demande de zoom automatique
-        self.scale = scale if (scale is not None and scale > 0) else 1.0    # ne jamais passer scale à 0 !!     Échelle graphique du dessin en[Px/µm]
+        self.scale = scale if (scale is not None and scale > 0) else 0.1    # ne jamais passer scale à 0 !!     Échelle graphique du dessin en[Px/µm]
         self.scale_def = self.scale     # TODO: devra être importée depuis les paramètres ==> Échelle par défaut en[Px/µm]
         self.connect_line = conect_line                     # Utiliser le premier et dernier segment pour calculer le zoom automatique
         self.offset_base = [0.5,0.5]
@@ -599,7 +599,7 @@ class ProfilCanvas(Widget):
         self._timer_debounce_on()       # On utilise le debounce pour une petite temporisation avant de raffraichir l'affichage
 
         self.set_scale(scale=self.scale, auto_scale=self.auto_scale)    # pour forcer les calculs et l'affichage à ce mettre à jour
-
+        print("DEBUG_ProfilCanvas_602: end init")
     # Fonction de debounce pour les calculs lourd et la màj graphique
     def up_drawing(self):
         """
@@ -708,6 +708,7 @@ class ProfilCanvas(Widget):
         #self.precalculer_profils_statiques(recalc_a, recalc_b)
         #self.trigger_redraw()    # DESSIN : On force Kivy à effacer la toile et à tout repeindre
         self.up_drawing()   # fonction qui lance les màj en fonction de self.timer_update_draw
+        print("DEBUG_ProfilCanvas_711: end update_size_entities")
     def OBSOLETE_update_entities(self, entities, B_entities=None):  #Remplacé par update_size_entities     
         """
         Met à jour la/les listes des entités à dessiner sans modifier l'échelle.
@@ -928,7 +929,7 @@ class ProfilCanvas(Widget):
                 self.scale = scale
 
         # --- 3. DÉLÉGATION À L'ENTONNOIR --- (c'est cette fonction qui va mettre l'affichage à jour)
-        self.update_size_entities(None, self.a_entities, self.b_entities)
+        self.update_size_entities(True, self.a_entities, self.b_entities)
         
         return self.scale
     def get_scale(self):
@@ -939,6 +940,20 @@ class ProfilCanvas(Widget):
 
     # fonction utilisées pour le zoom automatique et le centrage du dessin
     def set_auto_scale_code(self, code_str):
+        """
+        Modifie la configuration du zoom automatique.
+        """
+        if not isinstance(code_str, str) or not code_str:
+            return
+
+        # 2. Mise à jour de la configuration d'usine par défaut
+        self.auto_scale_entities_def = code_str
+        self.auto_scale_entities_last = code_str
+
+        # On signale qu'un recalcul d'échelle est requis au prochain battement
+        self.recalc_a = self.recalc_b = True
+        self.update_size_entities(box_dest=None, a_entities=self.a_entities, b_entities=self.b_entities)
+    def OLD_set_auto_scale_code(self, code_str):
         """
         Modifie la configuration par défaut du zoom automatique.
         Si la dernière intention (last) était alignée sur l'ancienne config, 
@@ -973,10 +988,15 @@ class ProfilCanvas(Widget):
             "last_code": self.auto_scale_entities_last
         }
 
-    def search_auto_scale(self, code_entities, margin=[0.1, 0.1]):
+    def search_auto_scale(self, code_entities=None, margin=[0.1, 0.1]):
         """ Gardée pour compatibilité : cherche la bbox puis calcule l'échelle. """
-        code_recherche = code_entities if isinstance(code_entities, str) else self.auto_scale_entities_def
-        bbox = self.search_min_max(code_recherche)
+        if isinstance(code_entities, str):
+            if code_entities.lower() == "def":
+                self.auto_scale_entities_last = self.auto_scale_entities_def
+            else:
+                self.auto_scale_entities_last = code_entities 
+        else: pass
+        bbox = self.search_min_max(self.auto_scale_entities_last)
         return self.compute_scale_from_bbox(bbox, margin)
     def compute_scale_from_bbox(self, bbox_um, margin=[0.1, 0.1]):
         """
@@ -1074,7 +1094,21 @@ class ProfilCanvas(Widget):
             return False
 
         return echelle_ideale
+    
+    def get_center_draw(self, codesearch= None):
+        """
+        Retourne le point centrale du dessin en um et pixel"""
+        if not isinstance(codesearch, str):
+            codesearch = self.auto_scale_entities_def
 
+        bbox_um = self.search_min_max(codesearch)   #retourne labite englobante des entities
+
+        delta_x = (bbox_um[1][0] - bbox_um[0][0]) / 2
+        delta_y = (bbox_um[1][1] - bbox_um[0][1]) / 2
+        center_um = [bbox_um[0][0] + delta_x, bbox_um[0][1] + delta_y]
+        center_px = [center_um[0] / self.scale , center_um[1] / self.scale]
+
+        return {"center_um":center_um, "center_px": center_px}
 
     def search_min_max(self, codesearch):
         """
@@ -1083,10 +1117,7 @@ class ProfilCanvas(Widget):
         return (en um): [[Xmin, Ymin], [Xmax, Ymax]] (sans adaptation des miroirs)
         """
         if not isinstance(codesearch, str):
-            if isinstance(self.auto_scale_entities_def, str):
-                codesearch = self.auto_scale_entities_def
-            else:
-                return False
+            codesearch = self.auto_scale_entities_def
             
         # Logique d'analyse de votre chaîne de caractères
         arg_a = "a" in codesearch.lower()
@@ -1484,8 +1515,8 @@ class ProfilCanvas(Widget):
 
                     if seg["type"] == "line" and "pixel_start" in seg:
                         if self.b_width > 0:
-                            px1, py1 = seg["pixel_start"], seg["pixel_start"]
-                            px2, py2 = seg["pixel_end"], seg["pixel_end"]
+                            px1, py1 = seg["pixel_start"]
+                            px2, py2 = seg["pixel_end"]
                             Line(points=[px1 + move_px, py1 + move_py, px2 + move_px, py2 + move_py], width=self.b_width)
                     
                     elif seg["type"] == "cercle" and "pixel_center" in seg:
@@ -1548,6 +1579,7 @@ class ProfilCanvas(Widget):
                             bw, bh = seg["pixel_box_size"][0], seg["pixel_box_size"][1]
                             a_start, a_end = seg["pixel_angles"][0], seg["pixel_angles"][1]
                             Line(ellipse=(bx, by, bw, bh, a_start, a_end), width=self.a_width)
+        #print("DEBUG_ProfilCanvas_1552: end trigger_redraw")
 
 
 class OBSOLETTE_DetailView(Widget):
@@ -1819,6 +1851,114 @@ class DashedLineWidget(Widget):
 
     def _redraw(self, *args):
         self._pos_to_box = self.get_relative_pos()
+        self._redraw_pos()
+    def drawing_to_possize(self, pos=[0,0], size=[0,0]):
+        self._pos_to_box = pos
+        self.start = [0,0]
+        self.end = size
+        self._redraw_pos()
+    def redraw_pos(self, start, end):
+        """
+        🎯 LE COMPAGNON IDÉAL À 60Hz :
+        Met à jour uniquement les points de coordonnées sans toucher au conteneur,
+        puis repeint instantanément la ligne d'axe.
+        """
+        self.start = start
+        self.end = end
+        self._redraw_pos()
+
+    def _redraw_pos(self):
+        self.canvas.clear()
+        
+        # Récupération des coordonnées réelles à l'écran
+        x1 = self.start[0] + self._pos_to_box[0]
+        y1 = self.start[1] + self._pos_to_box[1]
+        x2 = self.end[0] + self._pos_to_box[0]
+        y2 = self.end[1] + self._pos_to_box[1]
+
+        dx = x2 - x1
+        dy = y2 - y1
+        dist = (dx**2 + dy**2) ** 0.5
+        if dist <= 0:
+            return
+
+        # Vecteurs directeurs unitaires
+        dir_x = dx / dist
+        dir_y = dy / dist
+
+        # Extraction des paramètres
+        long_dash = self.dash_pattern[0]
+        short_dash = self.dash_pattern[1] if len(self.dash_pattern) > 1 else long_dash
+        space = self.dash_spacing
+
+        # Un bloc complet "Trait d'axe" équivaut à : Long + Espace + Court + Espace
+        block_len = long_dash + space + short_dash + space
+
+        # On veut que la ligne commence ET se termine par un trait long (Esthétique industrielle)
+        # Distance restante à combler après le premier et le dernier trait long obligatoire
+        disponibilite = dist - long_dash
+        
+        if disponibilite <= 0:
+            # Si la ligne est plus courte qu'un seul trait long, on dessine une ligne continue
+            with self.canvas:
+                Color(*self.line_color)
+                Line(points=[x1, y1, x2, y2], width=self.line_width)
+            return
+
+        # Calcul du nombre de blocs complets [Espace + Court + Espace + Long] imbriquables
+        nb_blocs = int(disponibilite // block_len)
+        
+        # S'il n'y a pas assez de place pour un bloc complet, on force au moins 1 pour le style
+        if nb_blocs == 0:
+            nb_blocs = 1
+
+        # Calcul du coefficient d'ajustement (scale) pour étirer/ajuster parfaitement le motif à la longueur
+        longueur_theorique = long_dash + (nb_blocs * block_len)
+        scale = dist / longueur_theorique
+
+        # Application du coefficient d'échelle aux dimensions de dessin
+        s_long = long_dash * scale
+        s_short = short_dash * scale
+        s_space = space * scale
+
+        # Initialisation du curseur de parcours de la ligne
+        current_dist = 0
+
+        with self.canvas:
+            Color(*self.line_color)
+
+            # 1. Premier Trait Long
+            x_s = x1 + current_dist * dir_x
+            y_s = y1 + current_dist * dir_y
+            current_dist += s_long
+            x_e = x1 + current_dist * dir_x
+            y_e = y1 + current_dist * dir_y
+            Line(points=[x_s, y_s, x_e, y_e], width=self.line_width)
+
+            # 2. Boucle de répétition des blocs d'alternance
+            for _ in range(nb_blocs):
+                # Saut de l'espace
+                current_dist += s_space
+
+                # Trait Court
+                x_s = x1 + current_dist * dir_x
+                y_s = y1 + current_dist * dir_y
+                current_dist += s_short
+                x_e = x1 + current_dist * dir_x
+                y_e = y1 + current_dist * dir_y
+                Line(points=[x_s, y_s, x_e, y_e], width=self.line_width)
+
+                # Saut de l'espace
+                current_dist += s_space
+
+                # Trait Long
+                x_s = x1 + current_dist * dir_x
+                y_s = y1 + current_dist * dir_y
+                current_dist += s_long
+                x_e = x1 + current_dist * dir_x
+                y_e = y1 + current_dist * dir_y
+                Line(points=[x_s, y_s, x_e, y_e], width=self.line_width)
+    def OLD_redraw_pos(self):
 
         self.canvas.clear()
         with self.canvas:
@@ -2326,6 +2466,56 @@ def intersection_of_lines(pnt_in, dir_ac, pnt_base, dir_out):
 
 
 # Création de forme
+def re_paint_entities(raw_list, reverse=False, default_color=None, error_color=None):
+    """
+    🎯 LE PISTOLET À PEINTURE DRO : Reçoit une liste d'entités DÉJÀ au format long 
+    ('line', 'arc', 'cercle', 'mesh') issue directement de ton PointManager.profil_segments.
+    Uniformise la couleur selon la charte d'usinage (Vert ou Rouge), gère les erreurs, 
+    et sauvegarde 'origin_color' intacte pour la mémoire inverse.
+    """
+    entities = []
+    
+    # Sécurisation des couleurs au format RGBA Kivy
+    error_color = normalize_color(error_color or (1, 0, 0, 1))         # Rouge vif par défaut
+    default_color = normalize_color(default_color or (0, 1, 0.5, 1))   # Vert fluo par défaut
+    ERROR_MARKER = "#error"
+
+    # Inversion de la liste si demandé par l'opérateur (sens de parcours)
+    #working_list = list(reversed(raw_list)) if reverse else raw_list
+    working_list = raw_list
+
+    for raw in working_list:
+        # On clone le segment pour ne pas détruire l'original du PointManager
+        seg = raw.copy()
+        
+        # Extraction du type long ('line', 'arc', 'cercle', 'mesh')
+        ent_type = raw.get("type")
+        if not ent_type:
+            continue
+
+        # 📦 SAUVEGARDE DE LA SÉCURITÉ INDUSTRIELLE
+        # On stocke la couleur d'origine de la CAO dans 'origin_color'
+        seg["origin_color"] = raw.get("color", default_color)
+
+        # Détection des drapeaux d'erreurs (produit scalaire précédent ou flag)
+        error = False
+        if "error" in raw and raw["error"]:
+            error = True
+        if raw.get("color") == ERROR_MARKER:
+            error = True
+
+        # 🎨 PEINTURE DES COUCHES D'ATELIER
+        if error:
+            seg["color"] = error_color
+        else:
+            seg["color"] = default_color
+
+        entities.append(seg)
+
+    print(f"[DEBUG: re_paint_entities] raw_list: {raw_list}")
+    print(f"[DEBUG: re_paint_entities] entities: {entities}")
+    return entities
+
 def create_fillet(point_before, point_intersect, point_after, radius, list_formated_auto=False, dict_formated_auto=False):
     """
     Crée un congé (arc de cercle) entre les segments point_before-point_intersect et point_intersect-point_after.
@@ -2446,7 +2636,7 @@ def create_fillet(point_before, point_intersect, point_after, radius, list_forma
         "cw": cw}
 
 # Mise en forme des segments pour ProfilPièce()
-def create_entities_for_proofil(raw_list, reverse=False, default_color=None, error_color=None, id_pnt=None):
+def OBSOLETTEcreate_entities_for_proofil(raw_list, reverse=False, default_color=None, error_color=None, id_pnt=None):
     """
     Spécialiste DRO : Uniformise le profil complet avec une couleur par défaut (ex: vert ou rouge foncé)
     et une couleur d'erreur (ex: rouge vif), tout en conservant 'origin_color' intact pour les fonctions
@@ -2574,6 +2764,7 @@ def create_entities_for_proofil(raw_list, reverse=False, default_color=None, err
         last_end = compute_raw(index)
 
     return entities
+
 def create_entities_from_raw(raw_list, reverse=False, error_color=None, id_pnt=None):
     """ create_entities_from_raw(raw_list, reverse=False)
     Crée une liste d'entités formatées (ligne, arc, cercle) à partir d'une liste brute,
@@ -2583,7 +2774,7 @@ def create_entities_from_raw(raw_list, reverse=False, error_color=None, id_pnt=N
         raw_list (list): Liste de dict des définitions brutes (type, points, etc.).
         (la ligne s'adapte aux points des segments: précédent et suivant; la droite à son start et end fixe)
             ex ligne : {"type":"l", "start":[0,0], "end":[0,0], "color":(0.5,0.5,0.5,1), "id_pnt":None} 
-            ex droite : {"type":"d", "start":[0,0], "end":[0,0], "color":(0.5,0.5,0.5,1), "id_pnt":None} 
+            ex droite : {"type":"d", "start":[0,0], "end":[0,0], "color":(0.5,0.5,0.5,1), "id_pnt":None, "vec_dir":[dx,dy]}(dx= delta end[0]-start[0]; idem pour dy) 
             ex arc : {"type":"a", "start":[0,0], "end":[0,0], "center":[0,0], "radius":0, "dir":True}
             ex cercle: {"type":"c", "center":[0,0], "radius":0, "color":#rrggbb, "id_pnt":10}
             args:
@@ -2682,6 +2873,17 @@ def create_entities_from_raw(raw_list, reverse=False, error_color=None, id_pnt=N
                 start, end = raw["start"], raw["end"]
 
             if start != end:
+                ''''''
+                dx1 , dy1 = raw["end"][0] - raw["start"][0] , raw["end"][1] - raw["start"][1]
+                dx2 , dy2 = raw["vec_dir"]
+                # Calcul du produit scalaire pour vérifier si les directions sont opposées
+                dot_product = dx1 * dx2 + dy1 * dy2
+                if dot_product < 0 or raw.get("error", False):
+                    color = error_color
+                    error = True
+                    if entities:
+                        entities[-1]["color"] = error_color
+                
                 entities.append(creat_entry_line(start, end, color, origin_color, ident))
 
         elif ent_type == "a":        
@@ -2720,6 +2922,8 @@ def create_entities_from_raw(raw_list, reverse=False, error_color=None, id_pnt=N
         raw = raw_list[index]
         last_end = compute_raw(index)
 
+        #print(f"[DEBUG: create_entities_from_raw] raw_list: {raw_list}")
+        #print(f"[DEBUG: create_entities_from_raw] entities: {entities}")
     return entities
 
 def extract_raw_from_entity(entity, use_origin_color=True, reverse=False):
@@ -2747,6 +2951,11 @@ def extract_raw_from_entity(entity, use_origin_color=True, reverse=False):
         error = (entity.get("origin_color") != entity.get("color"))
 
     if typ == "line":
+        # 🎯 SÉCURISATION DU VECTEUR DIRECTEUR AU DÉPAQUETAGE
+        # 1. On tente d'aller récupérer le vecteur directeur d'origine s'il était stocké
+        # 2. Si l'entité n'en avait pas (ligne standard), on calcule son vecteur à la volée [dx, dy]
+        vec_dir = entity.get("vec_dir", [entity["end"][0] - entity["start"][0], entity["end"][1] - entity["start"][1]])
+
         start = entity["end"] if reverse else entity["start"]
         end = entity["start"] if reverse else entity["end"]
         return {
@@ -2755,7 +2964,8 @@ def extract_raw_from_entity(entity, use_origin_color=True, reverse=False):
             "end": end,
             "color": color,
             "id_pnt": id_pnt,
-            "error": error
+            "error": error,
+            "vec_dir": vec_dir  # 🌟 Ré-injection de la clé magique pour éliminer le KeyError !
         }
 
     elif typ == "arc":

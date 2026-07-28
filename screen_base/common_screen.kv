@@ -1,0 +1,122 @@
+
+#:import MenuButton common_widgets.MenuButton
+#:import dp kivy.metrics.dp
+
+# =====================================================================
+# 🎛️ LA BARRE DE BOUTONS LATÉRALE UNIFIÉE (Territoire Commande)
+# =====================================================================
+<BaseScreenToolBar>:
+    orientation: "vertical"
+    size_hint_y: 1
+    size_hint_x: None
+    width: dp(90)
+    
+    # 🎯 CONFIGURATION DU LISERÉ ET DE L'ESPACEMENT
+    padding: 8     # Crée une bordure de 8px tout autour de la barre
+    spacing: 6     # Laisse un fin liseré vert de 6px visible entre chaque bouton
+    
+    canvas.before:
+        Color:
+            rgba: 0.15, 0.25, 0.15, 1  # Vert d'ambiance d'usine (liserés)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    # 🟢 1. MODE USINAGE (Bouton classique push)
+    MenuButton:
+        id: btn_fao
+        text: "DRO"
+        status: 1  # On peut le mettre en vert ACTIF par défaut si c'est la page d'ouverture
+        on_release: app.changer_ecran("ecran_dro")
+
+    # 🟢 2. OUVERTURE DE L'ÉDITEUR GÉOMÉTRIQUE (Connecté à votre ScreenManager)
+    MenuButton:
+        id: btn_cao
+        text: "CAO"
+        status: 0  # Neutre
+        on_release: app.changer_ecran("ecran_dessin")
+
+    # 🟢 3. CONFIGURATION OUTILS (Bouton classique push)
+    MenuButton:
+        id: btn_tool
+        text: "TOOL"
+        status: 0  # Neutre
+
+    # 🟢 4. CONFIGURATION MACHINE (Bouton classique push)
+    MenuButton:
+        id: btn_mcu
+        text: "MCU"
+        status: 0  # Neutre
+
+    # 🟡 5. INTERRUPTEUR FORMULAIRES TACTILES (Version Centrale Synchro)
+    MenuButton:
+        id: btn_ui_tactil
+        text: "TACTIL"
+        is_toggle: True  # C'est un Toggle permanent
+        
+        # 🔄 SYNCHRONISATION INDESTRUCTIBLE :
+        # Kivy surveille app.mode_tactile_actif. Si l'application passe à True, 
+        # le bouton de CHAQUE page va se mettre en position enfoncée ("down") tout seul !
+        state: "down" if app.mode_tactile_actif else "normal"
+        
+        # 🎯 L'ACTION DIRECTE : Quand on clique, on pousse la valeur dans la propriété de l'App
+        on_release: app.mode_tactile_actif = (self.state == "down")
+
+    # 🟢 6. COMPENSATIONS ET DECALAGES (Bouton classique push)
+    MenuButton:
+        id: btn_offset
+        text: "OFFSET"
+        status: 0  # Neutre
+
+    # 🟢 7. PARAMÈTRES LOGICIEL (Bouton classique push)
+    MenuButton:
+        id: btn_parametres
+        text: "PARAMETRES"
+        status: 0  # Neutre
+
+    # 🟢 8. RÉGLAGES TOUR (Bouton classique push)
+    MenuButton:
+        id: btn_reglages
+        text: "RÉGLAGES"
+        status: 0  # Neutre
+
+
+# =====================================================================
+# 🖥️ 2. LE GABARIT CHÂSSIS UNIVERSEL POUR TOUTES LES PAGES
+# =====================================================================
+<BaseScreenLayout>:
+    orientation: 'vertical'
+    spacing: 0
+    padding: 0
+
+    # 1️⃣ L'ENTÊTE HAUTE (Bandeau d'infos indispensables)
+    BoxLayout:
+        id: header_zone   
+        size_hint_y: None
+        height: dp(70)
+        canvas.before:
+            Color:
+                rgba: 0.1, 0.1, 0.15, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+    # 🧱 LE CORPS INFÉRIEUR (Barre à gauche, contenu à droite)
+    BoxLayout:
+        orientation: 'horizontal'
+        size_hint_y: 1
+        spacing: 0
+        padding: 0
+
+        # 2️⃣ LA BARRE DE BOUTONS LATÉRALE (Toujours visible à gauche)
+        BaseScreenToolBar:
+            id: tools_bar    # 🎯 VALIDÉ : C'est notre barre d'outils
+
+        # 3️⃣ LA ZONE DE CONTENU PRINCIPALE (À droite)
+        BoxLayout:
+            id: body_zone     # 🎯 VALIDÉ : C'est le corps de nos formulaires
+            size_hint_x: 1
+            size_hint_y: 1
+            orientation: 'vertical'
+            spacing: 0
+            padding: 0

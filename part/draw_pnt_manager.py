@@ -614,7 +614,7 @@ class PointValue:
         
     def set_from_input(self, input_str: str):
         """
-        Met à jour le PointValue.value à partir d’une chaîne utilisateur, avec ou sans unité.
+        Met à jour le PointValue.value à partir d'une chaîne utilisateur, avec ou sans unité.
         (convertion: val_disp >> val_work)
             Exemples valides :
             - "12.5"        → interprété en self.unit_id
@@ -625,7 +625,7 @@ class PointValue:
         Retourne :
         - True  → si la valeur a été modifiée
         - False → si la valeur est restée identique
-        - 'invalid_unit'   → si l’unité est inconnue ou incomplette
+        - 'invalid_unit'   → si l'unité est inconnue ou incomplette
         - 'invalid_format' → si le texte est intraitable
         """
         # Nettoyage de la valeur contrôle et extraction de l'unité écrite
@@ -981,8 +981,7 @@ class PointManager:
               puis remplacés à l'endroit exact de la coupe.
             - L'attribut `id_pnt` est automatiquement ajouté aux segments générés.
         """
-
-        
+   
         # Informe que le dessin actuel n'est plus sychronisé avec le dessin du MCU qui pilote la machine
         self.mcu_synchronise = False # Le dessin a changé, la machine n'est plus à jour !
 
@@ -1029,6 +1028,9 @@ class PointManager:
                 pos_c = self.entries[idx_entry+1].raw["pos"]
                 tmp_shape = shape_cls(pos_a, this_entry, pos_c, self.data_mirror)
                 raw_segs = getattr(tmp_shape, "draw_part", [])
+                #===============================================
+                print(f"[DEBUG: load_seg_shape] entities: {raw_segs}")
+                #===============================================
                 if isinstance(raw_segs, list):
                     for _seg in raw_segs:
                         _seg["id_pnt"] = this_id    # c'est un list, ajouter l'ident du "point entry" au segments
@@ -1039,6 +1041,10 @@ class PointManager:
 
                     if shape_start_point is None:
                         shape_start_point = this_entry.raw["pos"]
+                    #===============================================
+                    print(f"[DEBUG: load_seg_shape] shape_start_point: {shape_start_point}")
+                    print(f"[DEBUG: load_seg_shape] shape_end_point: {shape_end_point}")
+                    #===============================================
                     return (raw_segs, shape_start_point, shape_end_point)
             return None     # Cette terminaison et invalide ou null
 

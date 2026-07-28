@@ -232,21 +232,10 @@ def get_unit_config(unit_type_or_id):
               }
 
     Raises:
-        ValueError: si l’unité est inconnue.
+        ValueError: si l'unité est inconnue.
     """
-    #if unit_id and unit_id in USER_SETTINGS[""]:
-    '''    
-    if unit_type_or_id == "dist" or unit_type_or_id == "unit_distance":
-        unit_id = USER_SETTINGS.get("unit_distance", "mm")
-    elif unit_type_or_id == "ang" or unit_type_or_id == "unit_angle":
-        unit_id = USER_SETTINGS.get("unit_angle", "deg")
-    elif unit_type_or_id == "speed" or unit_type_or_id == "unit_speed":
-        unit_id = USER_SETTINGS.get("unit_speed", "rpm")
-    else:
-        unit_id = unit_type_or_id
-    '''
+    
     unit_id = get_unit_id(unit_type_or_id)
-
 
     cfg = UNIT_SETTINGS.get(unit_id)
     if not cfg:
@@ -260,7 +249,7 @@ def get_unit_config(unit_type_or_id):
         "label": cfg.get("label")
     }
 
-def switch_unit(value, last_unit_id, new_unit_id):
+def OLD_FALSE_switch_unit(value, last_unit_id, new_unit_id):
     """
     Convertit une valeur d'une unité (last_unit_id) vers une autre (new_unit_id).
 
@@ -294,6 +283,45 @@ def switch_unit(value, last_unit_id, new_unit_id):
 
     # Conversion de la valeur
     converted_value = val * factor_out / factor_in
+
+    # Retourner la valeur convertie avec l'ID et le label de la nouvelle unité
+    return [converted_value, new_unit_conf["unit_id"], new_unit_conf["label"]]
+def switch_unit(value, last_unit_id, new_unit_id):
+    """
+    Convertit une valeur d'une unité (last_unit_id) vers une autre (new_unit_id).
+
+    Args:
+        value (str | float | int): La valeur à convertir, sous forme de nombre ou chaîne.
+        last_unit_id (str): L'identifiant de l'unité actuelle (ex: "mm", "rpm").
+        new_unit_id (str): L'identifiant de la nouvelle unité vers laquelle convertir (ex: "in", "tr/s").
+
+    Returns:
+        list: [valeur_convertie, new_unit_id, new_unit_label]
+        str: "erreur" en cas d'erreur
+    """
+    # Si la valeur est un nombre, utiliser directement la valeur
+    if isinstance(value, (int, float)):
+        val = value
+        last_unit_conf = get_unit_config(last_unit_id)
+    else:
+        # Si la valeur est une chaîne (par exemple "12.5mm"), la parser
+        val_list = parse_user_input(value, last_unit_id)
+        if isinstance(val_list, str):
+            return "erreur"  # Si erreur de parsing, retourner "erreur"
+        val = val_list[0]
+        last_unit_conf = get_unit_config(val_list[1])  # Config de l'unité d'origine
+
+    # Config de l'unité cible
+    new_unit_conf = get_unit_config(new_unit_id)
+
+    # Facteurs de conversion (ex: nombre de microns ou millièmes de tours par unité)
+    factor_in = last_unit_conf["factor"]
+    factor_out = new_unit_conf["factor"]
+
+    # 🎯 LA FORMULE CORRIGÉE ET SÉCURISÉE :
+    # 1. (val * factor_in) descend la valeur vers votre base entière universelle (microns ou millièmes de tr/s)
+    # 2. / factor_out remonte cette base vers l'unité d'affichage cible demandée
+    converted_value = val * factor_in / factor_out
 
     # Retourner la valeur convertie avec l'ID et le label de la nouvelle unité
     return [converted_value, new_unit_conf["unit_id"], new_unit_conf["label"]]
