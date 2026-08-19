@@ -1,0 +1,11 @@
+Icône manquantes:
+- pour les pages de formulaire:
+    screen_CAO -> ico_cao.png
+    screen_SETTING -> ico_tools.png
+    screen_PARAM -> ico_roue.png
+    screen_MCU -> ico_muscle.png
+    screen_OFFSET -> ico_mesure.png
+
+Format d'images, par défaut Kivy utilise les format:
+    - jpg (transparent en blanc)
+    - png (fond transparent)

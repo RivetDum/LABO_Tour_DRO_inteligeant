@@ -1,0 +1,23 @@
+{
+    "cutt_profile": {
+        "1": {
+            "name": "CCMT09",
+            "desc": "Plaquette ébauche losange 80°",
+            "points": [
+                [0.0, 0.0, 400.0],
+                [9525.0, 0.0, 400.0],
+                [11177.0, 9380.0, 400.0],
+                [1652.0, 9380.0, 400.0]
+            ],
+            "offset_mount": [-400.0, -400.0]
+        },
+        "2": {
+            "name": "Plaquette Ronde R6350",
+            "desc": "Insert rond ISO R06",
+            "points": [
+                [0.0, 0.0, 3175.0]
+            ],
+            "offset_mount": [0.0, 0.0]
+        }
+    }
+}

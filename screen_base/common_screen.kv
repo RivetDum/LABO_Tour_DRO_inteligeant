@@ -1,11 +1,12 @@
 
 #:import MenuButton common_widgets.MenuButton
+#:import MenuButton common_widgets.BtnSwitchImageLed
 #:import dp kivy.metrics.dp
 
 # =====================================================================
 # 🎛️ LA BARRE DE BOUTONS LATÉRALE UNIFIÉE (Territoire Commande)
 # =====================================================================
-<BaseScreenToolBar>:
+<OLD_BaseScreenToolBar>:
     orientation: "vertical"
     size_hint_y: 1
     size_hint_x: None
@@ -26,27 +27,57 @@
     MenuButton:
         id: btn_fao
         text: "DRO"
-        status: 1  # On peut le mettre en vert ACTIF par défaut si c'est la page d'ouverture
-        on_release: app.changer_ecran("ecran_dro")
+        status: 0
+        color: app.navigation_colors["screen_FAO"]
+        on_release: app.changer_ecran("screen_FAO")
 
     # 🟢 2. OUVERTURE DE L'ÉDITEUR GÉOMÉTRIQUE (Connecté à votre ScreenManager)
     MenuButton:
         id: btn_cao
         text: "CAO"
-        status: 0  # Neutre
-        on_release: app.changer_ecran("ecran_dessin")
+        status: 0
+        color: app.navigation_colors["screen_CAO"]
+        on_release: app.changer_ecran("screen_CAO")
 
     # 🟢 3. CONFIGURATION OUTILS (Bouton classique push)
     MenuButton:
         id: btn_tool
         text: "TOOL"
-        status: 0  # Neutre
+        status: 0
+        color: app.navigation_colors["screen_CUTTER"]
+        on_release: app.changer_ecran("screen_CUTTER")
+
+    # 🟢 6. COMPENSATIONS ET DECALAGES (Bouton classique push)
+    MenuButton:
+        id: btn_offset
+        text: "OFFSET"
+        status: 0
+        color: app.navigation_colors["screen_OFFSET"]
+        on_release: app.changer_ecran("screen_OFFSET")
 
     # 🟢 4. CONFIGURATION MACHINE (Bouton classique push)
     MenuButton:
         id: btn_mcu
         text: "MCU"
-        status: 0  # Neutre
+        status: 0
+        color: app.navigation_colors["screen_MCU"]
+        on_release: app.changer_ecran("screen_MCU")
+
+    # 🟢 7. PARAMÈTRES LOGICIEL (Bouton classique push)
+    MenuButton:
+        id: btn_parametres
+        text: "PARAMETRES"
+        status: 0
+        color: app.navigation_colors["screen_PARAM"]
+        on_release: app.changer_ecran("screen_PARAM")
+
+    # 🟢 8. RÉGLAGES TOUR (Bouton classique push)
+    MenuButton:
+        id: btn_reglages
+        text: "RÉGLAGES"
+        status: 0
+        color: app.navigation_colors["screen_SETTING"]
+        on_release: app.changer_ecran("screen_SETTING")
 
     # 🟡 5. INTERRUPTEUR FORMULAIRES TACTILES (Version Centrale Synchro)
     MenuButton:
@@ -61,24 +92,124 @@
         
         # 🎯 L'ACTION DIRECTE : Quand on clique, on pousse la valeur dans la propriété de l'App
         on_release: app.mode_tactile_actif = (self.state == "down")
+<TO_BTSWITCH_BaseScreenToolBar>:
+    orientation: "vertical"
+    size_hint_y: 1
+    size_hint_x: None
+    width: dp(90)
+    
+    # 🎯 CONFIGURATION DU LISERÉ ET DE L'ESPACEMENT
+    padding: 8     # Crée une bordure de 8px tout autour de la barre
+    spacing: 6     # Laisse un fin liseré vert de 6px visible entre chaque bouton
+    
+    canvas.before:
+        Color:
+            rgba: 0.15, 0.25, 0.15, 1  # Vert d'ambiance d'usine (liserés)
+        Rectangle:
+            pos: self.pos
+            size: self.size
 
-    # 🟢 6. COMPENSATIONS ET DECALAGES (Bouton classique push)
-    MenuButton:
+    # 🟢 1. MODE USINAGE (Bouton classique push avec icône)
+    BtnSwitchImageLed:
+        id: btn_fao
+        target_screen: "screen_FAO"
+        on_release: app.changer_ecran("screen_FAO")
+
+    # 🟢 2. OUVERTURE DE L'ÉDITEUR GÉOMÉTRIQUE (Avec icône)
+    BtnSwitchImageLed:
+        id: btn_cao
+        target_screen: "screen_CAO"
+        on_release: app.changer_ecran("screen_CAO")
+
+    # 🟢 3. CONFIGURATION OUTILS (Avec icône)
+    BtnSwitchImageLed:
+        id: btn_tool
+        target_screen: "screen_CUTTER"
+        on_release: app.changer_ecran("screen_CUTTER")
+
+    # 🟢 6. COMPENSATIONS ET DECALAGES (Texte seul)
+    BtnSwitchImageLed:
         id: btn_offset
-        text: "OFFSET"
-        status: 0  # Neutre
+        target_screen: "screen_OFFSET"
+        on_release: app.changer_ecran("screen_OFFSET")
 
-    # 🟢 7. PARAMÈTRES LOGICIEL (Bouton classique push)
-    MenuButton:
+    # 🟢 4. CONFIGURATION MACHINE (Texte seul)
+    BtnSwitchImageLed:
+        id: btn_mcu
+        target_screen: "screen_MCU"
+        on_release: app.changer_ecran("screen_MCU")
+
+    # 🟢 7. PARAMÈTRES LOGICIEL (Texte seul)
+    BtnSwitchImageLed:
         id: btn_parametres
-        text: "PARAMETRES"
-        status: 0  # Neutre
+        target_screen: "screen_PARAM"
+        on_release: app.changer_ecran("screen_PARAM")
 
-    # 🟢 8. RÉGLAGES TOUR (Bouton classique push)
-    MenuButton:
+    # 🟢 8. RÉGLAGES TOUR (Texte seul)
+    BtnSwitchImageLed:
         id: btn_reglages
-        text: "RÉGLAGES"
-        status: 0  # Neutre
+        target_screen: "screen_SETTING"
+        on_release: app.changer_ecran("screen_SETTING")
+
+    # 🟡 5. INTERRUPTEUR FORMULAIRES TACTILES (Version Centrale Synchro)
+    BtnSwitchImageLed:
+        id: btn_ui_tactil
+        target_screen: "sw_TACTILE"
+        is_toggle: True  # 🎛️ Manette permanente (Reste enfoncé en relief 3D)
+        
+        # 🔄 SYNCHRONISATION : L'interrupteur s'enfonce tout seul selon l'état de l'App
+        state: "down" if app.mode_tactile_actif else "normal"
+        on_release: app.basculer_mode_tactile()
+<BaseScreenToolBar>:
+    orientation: "vertical"
+    size_hint_y: 1
+    size_hint_x: None
+    width: dp(90)
+    padding: 8     
+    spacing: 10     
+    
+    canvas.before:
+        Color:
+            rgba: 0.15, 0.20, 0.15, 1  
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    # 🔵 Les Onglets de Navigation Pures (BottonImageLed)
+    BottonImageLed:
+        target_screen: "screen_FAO"
+        on_release: app.changer_ecran("screen_FAO")
+
+    BottonImageLed:
+        target_screen: "screen_CAO"
+        on_release: app.changer_ecran("screen_CAO")
+
+    BottonImageLed:
+        target_screen: "screen_OFFSET"
+        on_release: app.changer_ecran("screen_OFFSET")
+
+    BottonImageLed:
+        target_screen: "screen_CUTTER"
+        on_release: app.changer_ecran("screen_CUTTER")
+
+    BottonImageLed:
+        target_screen: "screen_MCU"
+        on_release: app.changer_ecran("screen_MCU")
+
+    SwitchImageLed:    # 🎛️ L'Interrupteur Permanent Machine (SwitchImageLed)
+        target_screen: "sw_TACTILE"
+        size_hint_y: 0.7
+        on_release: app.basculer_mode_tactile()
+
+    BottonImageLed:
+        target_screen: "screen_PARAM"
+        size_hint_y: 0.7
+        on_release: app.changer_ecran("screen_PARAM")
+
+    BottonImageLed:
+        target_screen: "screen_SETTING"
+        size_hint_y: 0.7
+        on_release: app.changer_ecran("screen_SETTING")
 
 
 # =====================================================================
@@ -120,3 +251,39 @@
             orientation: 'vertical'
             spacing: 0
             padding: 0
+
+    # À l'allumage, il fait 0x0 pixel et se cache hors écran.    # 🕵️‍♂️ Le FloatLayout Fantôme (Hauteur 0)
+
+    FloatLayout:
+        size_hint_y: None
+        height: 0
+
+        # 🟦 Le conteneur du cadre (C'est lui qui gère la taille et la position absolue)
+        BoxLayout:
+            id: float_input_box
+            size_hint: None, None
+            size: 0, 0        # 💡 Un poil plus grand (100 + 2px de bordure de chaque côté)
+            pos: -2, 500         # Position sur l'écran
+            padding: 2            # 🎯 L'épaisseur de votre cadre bleu !
+            orientation: 'vertical'
+
+            # 🎨 Dessin du cadre bleu en arrière-plan
+            canvas.before:
+                Color:
+                    rgba: [0.2, 0.6, 0.9, 1] # Bleu
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+
+            # 🎯 L'Input Text (Il prend 100% de la place restante après le padding)
+            TextInput:
+                id: input_text_floating
+                size_hint: 1, 1   # ✅ Parfait ! Il s'adapte au BoxLayout
+                multiline: False
+                cursor_color: [0.2, 0.6, 0.9, 1]
+                background_color: [0.18, 0.18, 0.22, 1]
+                foreground_color: [0.95, 0.95, 1, 1]
+                disabled: True
+                
+                on_text_validate: root.save_floating_input()
+                on_focus: if not self.focus: root.save_floating_input()

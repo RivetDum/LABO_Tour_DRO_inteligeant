@@ -1,23 +1,24 @@
 # dro_viewer.py à la racine du projet
 
-from kivy.uix.widget import Widget
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.graphics import Color, RoundedRectangle, Line
-from kivy.properties import StringProperty, NumericProperty, BooleanProperty
-from kivy.metrics import dp
-#from copy import deepcopy
-import copy
 from kivy.app import App
 from kivy.lang import Builder
-from part.draw_pnt_manager import PointManager
-from cutting_tool.cutter import CutterManager
-from machine_tool.machine_data import MachineState
-from reel_time.machine_mcu import CommManager
-from common_widgets import ClickableLabel
+from kivy.clock import Clock
+import copy
+from kivy.metrics import dp
+from kivy.properties import StringProperty, NumericProperty, BooleanProperty
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.widget import Widget
+from kivy.uix.button import Button
+from kivy.graphics import Color, RoundedRectangle, Line
 from common_draw import ProfilCanvas, DashedLineWidget
-import config as conf
-from config import AXIS_CONFIG  
+from common_widgets import ClickableLabel
+
+import configurator.config as conf
+from configurator.config import AXIS_CONFIG, USER_CONFIG
+
+from machine_tool.machine_data import MachineState
+from part.draw_pnt_manager import PointManager
+from reel_time.machine_mcu import CommManager
 from screen_base.common_screen import BaseScreenLayout
 
 # class pur python sans .kv
@@ -30,13 +31,14 @@ class AxisBox(BoxLayout):
 
         # --- Props internes ---
         self.status = status
+        self.size_hint_y= 1
         self.height_line = height_line
         self.wide = wide
         self.special = special
         self.clickable_cells: dict = {}
         # --- Layout ---
         self.orientation = "horizontal" if wide else "vertical"
-        self.size_hint_y = None
+        #self.size_hint_y = None
         self.spacing = 30 if wide else 10
         self.padding = (8, 1, 8, 10)
         # --- Canvas ---
@@ -53,23 +55,31 @@ class AxisBox(BoxLayout):
         self.build()
 
     def build(self):
+
         # Base
         self.ax_dim = AxisDim(
             axe_ident=self.axe_ident,
-            size_hint_y=None,
+            size_hint_y=1,
             height=self.height_line
         )
         self.add_widget(self.ax_dim)
 
         # Complément éventuel
         self.ax_compl = None
-        if self.special == "Yplus":
+        if self.special == "TEST":
             self.ax_compl = AxisYplus(
                 self.axe_ident,
-                size_hint_y=None,
+                size_hint_y=1,
                 height=self.height_line
             )
             self.add_widget(self.ax_compl)
+        elif self.special == "Yplus":
+            self.ax_dim = AxisDim(
+                axe_ident=self.axe_ident,
+                size_hint_y=1,
+                height=self.height_line
+            )
+            self.add_widget(self.ax_dim)
 
         elif self.special == "Splus":
             # Futur module
@@ -86,7 +96,7 @@ class AxisBox(BoxLayout):
                 self.ax_dim.axe_ident = value
             if self.ax_compl:
                 self.ax_compl.axe_ident = value
-            print(f"Le texte a changé : {value}")
+            #print(f"Le texte a changé : {value}")
 
     # ---- Helpers ----
 
@@ -130,7 +140,6 @@ class AxisDim(BoxLayout):
     #def on_kv_post(self, base_widget):
     def on_axe_ident(self, instance, value):
         """Appelé après le chargement KV — ici on peut accéder à axe_ident"""
-        #print(f"-> -> -> 1 init HeaderAxis: axe_ident: {self.axe_ident}")
         self._dim_clickables = {    # dict d'action associé lors de click
             self.ids.btn_name: {"click": self.label_clicked, "dbl_click": self.config_clicked},
             self.ids.btn_value: {"click": self.label_clicked},
@@ -138,16 +147,14 @@ class AxisDim(BoxLayout):
         }
 
         if self.axe_ident:
-             # Ex: "hor": {"screen": "z", "factor": 1, "numerator": 5, "denumerator": 1, "type": "unit_distance", "info":"profondeur trainard, absolu"}
+             # Ex: "hor": {"screen": "z", "factor": 1, "numerator": 5, "denominator": 1, "type": "unit_distance", "info":"profondeur trainard, absolu"}
             self.axe_config = copy.deepcopy(AXIS_CONFIG.get(self.axe_ident, {}))
-            #print("-> -> -> 2 init HeaderAxis")
 
             if self.axe_config:
                 # Nom affiché (ex: "Z", "X", "Y")
                 self.name_txt = self.axe_config.get("screen", "?")
                 # Diamètre si factor == 2
                 self.val_diam = (self.axe_config.get("factor", 1) == 2)
-                print(f"-> -> -> 3 val_diam: {self.val_diam} / factor: {self.axe_config.get("factor", 1)}")
                 
                 # Type ou ident d’unité associé (unit_distance / unit_angle / mm / inch / ...)
                 unit_type = self.axe_config.get("type", self.val_unit)
@@ -227,122 +234,12 @@ class AxisDim(BoxLayout):
 class AxisYplus(BoxLayout): pass
 
 
-# A supprimer, OBSOLETTE ou inutilisé
-class AxisBox_OLD(BoxLayout):
-    status = NumericProperty(0)
-    axe_ident = StringProperty(None)
-
-    def __init__(self, status=0, height_line=80, wide=True, special=None, **kwargs):
-        super().__init__(**kwargs)
-
-        self.status = status
-        self.height_line = height_line
-        self.wide = wide
-        self.special = special
-
-        self.clickable_cells: dict = {}
-
-        self.orientation = "horizontal" if wide else "vertical"
-        self.spacing = 30 if wide else 10
-        self.padding = (8, 15)
-
-        # === Canvas ===
-        with self.canvas.before:
-            # --- Fond ---
-            self.bg_color = Color(*self._compute_bg_color())
-            self.bg_rect = RoundedRectangle(
-                pos=self.pos,
-                size=self.size,
-                radius=[15]
-            )
-            # --- Bordure ---
-            self.border_color = Color(1, 1, 1, 0.6)
-            self.border_line = Line(
-                rounded_rectangle=(
-                    self.x, self.y, self.width, self.height, 15
-                ),
-                width=2
-            )
-        # Recalcul des tailles/positions quand le widget bouge
-        self.bind(pos=self._update_canvas, size=self._update_canvas)
-        self.bind(status=self._update_colors)
-        self.build()
-    
-    def build(self):
-        self.ax_dim = AxisDim(self.axe_ident, heigt=self.height_line)
-        self.ax_compl = None
-        self.add_widget(self.ax_dim)
-        if self.special == "Yplus":
-            self.ax_compl = AxisYplus(self.axe_ident, heigt=self.height_line)
-            self.add_widget(self.ax_compl)
-        elif self.special == "Splus":
-            #TODO: A faire: self.ax_compl = AxisSplus(self.axe_ident, heigt=self.height_line)
-            #TODO: A faire: self.add_widget(self.ax_compl)
-            pass
-    
-    def on_kv_post(self, base_widget):
-        # completter le dict des cellules cliquables et leurs actions associées
-        self.clickable_cells = self.ax_dim._dim_clickables.copy()
-        if self.ax_compl and self.ax_compl._clickables :
-            #TODO: Ajouter une copy de ax_compl._clickables au dict self.clickable_cells
-            pass
-
-
-    # Mise en forme
-    def _compute_bg_color(self):
-        return (
-            (0, 1, 0, 0.15) if self.status > 0 else
-            (1, 0, 0, 0.3) if self.status < 0 else
-            (0.4, 0.4, 0.4, 0.1)
-        )
-    
-    def _update_canvas(self, *args):
-        self.bg_rect.pos = self.pos
-        self.bg_rect.size = self.size
-
-        self.border_line.rounded_rectangle = (
-            self.x, self.y, self.width, self.height, 15
-        )
-class AxisFrame(Widget): pass
-class HeaderAxis(AxisDim, AxisFrame):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.clickable_cells: dict = {}
-
-    def on_kv_post(self, base_widget):
-        super().on_kv_post(base_widget)  # AxisDim on_kv_post s'exécute → _dim_clickables créé
-        self.clickable_cells = self._dim_clickables.copy()
-        #return super().on_kv_post(base_widget)
-class DroAxis(AxisDim, AxisFrame):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.clickable_cells: dict = {}
-
-    def on_kv_post(self, base_widget):
-        super().on_kv_post(base_widget)  # AxisDim on_kv_post s'exécute → _dim_clickables créé
-        self.clickable_cells = self._dim_clickables.copy()
-        #return super().on_kv_post(base_widget)
-class DroYAxis(AxisDim, AxisYplus, AxisFrame):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.clickable_cells: dict = {}
-
-    def on_kv_post(self, base_widget):
-        super().on_kv_post(base_widget)  # AxisDim on_kv_post s'exécute → _dim_clickables créé
-        self.clickable_cells = self._dim_clickables.copy()
-class DroAxisBase(Widget): pass
-class DroAxis(DroAxisBase): pass
-class DroAxis_Y(DroAxisBase): pass
-class DroAxis_S(DroAxisBase): pass
-#class DroAxis_R(DroAxisBase): pass
-# fin de à supprimer
-
 class DroHeader(BoxLayout): 
     dro_manager = None
     pass
 
 class DroDro(BoxLayout): pass
-#class DroGraph(BoxLayout):pass
+
 class DroGraph(BoxLayout):
     """
     ========================================================================
@@ -442,20 +339,21 @@ class DroGraph(BoxLayout):
     ========================================================================
     """
 
-    # Couleur dessin
-    COLOR_CAO = (0.5, 0.8, 0.1, 0.8)
-    COLOR_FAO = (0.1, 0.8, 0.1, 1)
     # LE COMMUTATEUR DE SIGNAL : False = Burin_Mobile (Inspection) | True = Piece_Mobile (Usinage standard)
     move_mode = BooleanProperty(True)
+    
+    offset_tool_image = StringProperty("")
 
     def __init__(self, **kwargs):
         # 1. Variables d'animation centralisées (Territoire Écran)
-        self.scale = 0.0025              # Echelle de l'affichage [en px/µm]
-        self.mirror_hor = True
+        self.doigts_actifs = []     # Compteur de doigts pour le zoom tactile à deux doigts
+        self.scale_def = 0.010
+        self.scale = 0.010             # Echelle de l'affichage [en px/µm]
+        self.mirror_hor = False
         self.mirror_vert = True
 
         # Les offsets:
-        self.offset_base = [0.5, 0.5]   # Décalage du pnt 0,0 dans la box d'affichage [en %(de la taille de la box)]
+        self.offset_base = copy.deepcopy(USER_CONFIG.get("ratio_tool_screen", [0.75, 0.25]))   # Décalage du pnt 0,0 dans la box d'affichage [en %(de la taille de la box)]
         self.offset_screen = [0.0, 0.0] # Décallage de l'affichage par la souris [en pixels]
         self.offset_move = [0.0, 0.0]   # Position [hor, vert] reçue depuis les régles de la machine [en µm]
         self.pos_change_move_mode = [0.0, 0.0]  # Décalage succésif des basculements de move_mode [en µm] (pièce mobile vs burin_mobile)
@@ -467,6 +365,8 @@ class DroGraph(BoxLayout):
         super().__init__(**kwargs)
 
     def on_kv_post(self, base_widget):
+        #test:
+        self.offset_tool_image = "bitmaps/tool_0_centre.png"
         """DÉCLENCHEUR SÉCURISÉ : Les ID sont prêts, on effectue le premier ancrage de boîte."""
         container_global = self.ids.zone_globale
         stencil = self.ids.zone_decoupe
@@ -475,13 +375,15 @@ class DroGraph(BoxLayout):
         if container_global and stencil and repere_calcul:
             # 1️⃣ Instanciation de l'axe de référence
             self.axe_central = DashedLineWidget(
-                line_color=[0.8, 0.8, 1.0, 0.4], # Bleu cyan transparent
-                line_width=dp(1.0),
-                dash_pattern=[dp(30), dp(5)]
+                line_color=[1.0, 1.0, 1.0, 0.8], # Blanc
+                line_width=1.0,
+                dash_pattern=[dp(30), dp(5)],
+                dash_spacing = dp(12)
             )
             # 2️⃣ INJECTION SOUS LES AUTRES DESSINS
             # index=0 force Kivy à le placer en arrière-plan absolu du FloatLayout
-            container_global.add_widget(self.axe_central, index=0)            
+            #container_global.add_widget(self.axe_central, index=0)   
+            stencil.add_widget(self.axe_central, index=0)            
 
         if stencil and repere_calcul:
             self.canvas_outil.box_dest = repere_calcul
@@ -493,8 +395,11 @@ class DroGraph(BoxLayout):
             # 🎯 VRAIE MÉTHODE : On passe par update_size_entities pour le premier calcul d'offset_0
             self.canvas_outil.update_size_entities(box_dest=repere_calcul)
             self.canvas_piece.update_size_entities(box_dest=repere_calcul)
+
+        Clock.schedule_once(lambda dt: self.declencher_recentrage([0.5,0.5]), 1.2)
             
-        print(f"TEST: DROGRAPH / on_kv_post(): end fonction")
+            
+        #print(f"TEST: DROGRAPH / on_kv_post(): end fonction")
 
     def set_profil_pieces(self, fao_list=None, cao_list=None, box=None):
         """🎯 TON IDÉE GÉNIALE DE REPEINTURE : Filtre les listes et les envoie via la vanne officielle."""
@@ -502,13 +407,13 @@ class DroGraph(BoxLayout):
 
         fao_prepares = None
         if fao_list is not None and len(fao_list) > 0:
-            fao_prepares = cdraw.re_paint_entities(fao_list, reverse=False, default_color=self.COLOR_FAO)
+            fao_prepares = cdraw.re_paint_entities(fao_list, draw_type="profil_fao",liaison_line=None)
         elif fao_list is not None:
             fao_prepares = []
 
         cao_prepares = None
         if cao_list is not None and len(cao_list) > 0:
-            cao_prepares = cdraw.re_paint_entities(cao_list, reverse=False, default_color=self.COLOR_CAO, error_color=(1, 0, 0, 1))
+            cao_prepares = cdraw.re_paint_entities(cao_list, draw_type="profil_cao",liaison_line=None)
         elif cao_list is not None:
             cao_prepares = []
 
@@ -516,27 +421,29 @@ class DroGraph(BoxLayout):
         # pour changer les entités sans toucher au zoom ou à l'offset actuel !
         self.canvas_piece.update_size_entities(box_dest=box, a_entities=fao_prepares, b_entities=cao_prepares)
 
-    def OLD_distribuer_mouvements_canvas(self, current_esp32_microns):
-        """ Utilise move_axes_machine() pour pousser les microns de l'ESP32. (calculation simplifié)"""
-        self.offset_move = current_esp32_microns
+    def set_profil_cutter(self, cut_draw=None, offset_draw=None, box=None):
+        """Filtre les listes et les envoie via la vanne officielle."""
+        import common_draw as cdraw
 
-        if self.move_mode:
-            derniere_pos_piece = [  # La pièce glisse, on calcule la soustraction index par index
-                self.pos_change_move_mode[0] - self.offset_move[0],
-                self.pos_change_move_mode[1] - self.offset_move[1]
-            ]
-            self.canvas_piece.move_axes_machine(derniere_pos_piece, not_calc_new=False) 
-            # hauteur axe = derniere_pos_piece[1]
-            self.canvas_outil.move_axes_machine(self.pos_change_move_mode, not_calc_new=False) 
+        temptest = [cdraw.creat_entry_round([0,0],1000)]
 
-        else:    # MODE : Burin Mobile (Inspection)
-            derniere_pos_outil = [  # Le burin glisse, on calcule l'addition index par index
-                self.pos_change_move_mode[0] + self.offset_move[0],
-                self.pos_change_move_mode[1] + self.offset_move[1]
-            ]
-            # hauteur axe = derniere_pos_outil[1]
-            self.canvas_piece.move_axes_machine(self.pos_change_move_mode, not_calc_new=False) 
-            self.canvas_outil.move_axes_machine(derniere_pos_outil, not_calc_new=False)
+        cutter_prepares = None
+        #if cut_draw is not None and len(cut_draw) > 0:
+        #    cutter_prepares = cdraw.re_paint_entities(cut_draw, draw_type="tool_profil",liaison_line=None)
+        #elif cut_draw is not None:
+        #    cutter_prepares = []
+        cutter_prepares = cdraw.re_paint_entities(temptest, draw_type="tool_profil",liaison_line=None)
+
+        offset_prepares = None
+        if offset_draw is not None and len(offset_draw) > 0:
+            offset_prepares = cdraw.re_paint_entities(offset_draw, draw_type="offset",liaison_line=None)
+        elif offset_draw is not None:
+            offset_prepares = []
+
+        # 🎯 VRAIE MÉTHODE : On utilise la fonction d'usine officielle de ta classe
+        # pour changer les entités sans toucher au zoom ou à l'offset actuel !
+        self.canvas_outil.update_size_entities(box_dest=box, a_entities=cutter_prepares, b_entities=offset_prepares)
+
     def distribuer_mouvements_canvas(self, current_esp32_microns):
         """ Pousse les microns de l'ESP32 et aligne l'axe sur le calcul des pièces. """
         self.offset_move = current_esp32_microns
@@ -567,16 +474,17 @@ class DroGraph(BoxLayout):
             
 
         # Application directe de votre idée (Microns finaux -> Pixels)
-        y_axis_pos = y_axis_screen + derniere_pos_piece[1] * self.scale
+        y_axis_pos = y_axis_screen + derniere_pos_piece[1] * -self.scale
 
         # 🎯 3. MISE À JOUR DE LA LIGNE D'AXE DE ROTATION (En dessous)
         #self.axe_central.start = [0, y_axis_pos]
         #self.axe_central.end = [repere_calcul.width, y_axis_pos]
-        self.axe_central.redraw_pos([0, y_axis_pos], [self.width, y_axis_pos])
+        self.axe_central.redraw_pos([self.ids.box_calcul_gauche.pos[0],y_axis_pos], [self.ids.box_calcul_gauche.pos[0] + self.ids.box_calcul_gauche.width, y_axis_pos])
 
         # 🎯 4. REDESSINER LES PROFILS (Pièce et outil)
         self.canvas_piece.move_axes_machine(derniere_pos_piece, not_calc_new=False) 
         self.canvas_outil.move_axes_machine(derniere_pos_outil, not_calc_new=False) 
+        #print(f"INFO Mouvements: pos pièce: {derniere_pos_piece} / burin: {derniere_pos_outil}")
 
     def change_move_mode(self):
         """
@@ -604,179 +512,6 @@ class DroGraph(BoxLayout):
             self.pos_change_move_mode = new_offset
             self.move_mode = True
 
-
-    ''' OLD
-    def on_touch_move(self, touch):
-        """🎯 VRAIE MÉTHODE : Utilise update_offset() pour répercuter le Glisser-Déposer souris."""
-        repere_gauche = self.ids.get("box_calcul_gauche")
-        
-        if repere_gauche and repere_gauche.collide_point(*touch.pos) and 'initial_pos' in touch.ud:
-            dx = touch.x - touch.ud['initial_pos'][0]
-            dy = touch.y - touch.ud['initial_pos'][1]
-            
-            self.offset_screen[0] += dx
-            self.offset_screen[1] += dy
-            
-            # 🎯 VRAIE MÉTHODE : On passe par la fonction d'usine de ton ProfilCanvas !
-            # Elle va recalculer l'offset_0 et lancer self.up_drawing() de manière propre.
-            self.canvas_outil.update_offset(offset_screen=self.offset_screen, not_calc_new=False)
-            self.canvas_piece.update_offset(offset_screen=self.offset_screen, not_calc_new=False)
-            
-            touch.ud['initial_pos'] = touch.pos
-            return True
-        return super().on_touch_move(touch)
-    def zoom_all_in_piece(self):
-        """applique un niveau de zoom pour faire tenir toute lapièce dans le cadre,
-            sans activer le zoom_automatique (action unique, pas automatique!)
-        """
-        new_scale = self.canvas_piece.search_auto_scale(code_entities="A + B", margin=[0.1, 0.1])
-        self.canvas_piece.set_scale(new_scale,auto_scale=False)
-        #ici, il faut retourner l'échelle au parent pour qu'il l'applique au autres Canvas !
-        return new_scale
-    def declencher_auto_zoom(self):
-        """🎯 VRAIE MÉTHODE : Utilise set_scale() et update_offset() pour le bouton physique."""
-        # 1. On calcule l'échelle maximale par rapport à la géométrie de la pièce
-        scale_ideale = self.canvas_piece.search_auto_scale()
-        self.scale = scale_ideale
-        
-        # 2. On injecte l'échelle via la méthode d'usine (auto_scale=False coupe le mode automatique interne)
-        self.canvas_piece.set_scale(scale=scale_ideale, auto_scale=False)
-        self.canvas_outil.set_scale(scale=scale_ideale, auto_scale=False)
-        
-        # 3. On calcule le recentrage géométrique au milieu de l'écran utile
-        offset_calcule = self.canvas_piece.search_auto_offset()
-        self.offset_screen = offset_calcule
-        
-        # 4. On propage l'offset de centrage via la méthode d'usine officielle
-        self.canvas_piece.update_offset(offset_screen=self.offset_screen, not_calc_new=False)
-        self.canvas_outil.update_offset(offset_screen=self.offset_screen, not_calc_new=False)
-        print(f"[GRAPHIC] Auto-Scale exécuté via set_scale : {scale_ideale:.6f} Px/µm")
-    def declencher_recentrage(self):
-        """🎯 VRAIE MÉTHODE : Utilise update_offset() pour ramener la pièce au milieu."""
-        # On recalcule l'offset de centrage basé exclusivement sur l'échelle en cours
-        offset_calcule = self.canvas_piece.search_auto_offset()
-        self.offset_screen = offset_calcule
-        
-        # On propage l'offset via la vanne d'usine officielle
-        self.canvas_piece.update_offset(offset_screen=self.offset_screen, not_calc_new=False)
-        self.canvas_outil.update_offset(offset_screen=self.offset_screen, not_calc_new=False)
-        print("[GRAPHIC] Recentrage de l'origine exécuté via update_offset.")       
-
-    def OLD_distribuer_mouvements_canvas(self, current_esp32_microns):
-        """
-        Distributeur à 60Hz : Les deux canvas reçoivent not_calc_new=False 
-        pour forcer le rafraîchissement synchrone des calques sans recalculer les microns.
-        """
-        offset_move = current_esp32_microns
-
-        if self.move_mode:
-            # 🛠️ MODE : Pièce Mobile (Usinage standard)
-            # L'outil est fixe
-            self.derniere_pos_outil = self.last_move_t
-            self.canvas_outil.move_axes_machine(self.derniere_pos_outil, not_calc_new=False) # 🎨 Dessine le fixe
-            
-            # La pièce glisse
-            self.derniere_pos_piece = [
-                self.last_move_p[0] - offset_move[0],
-                self.last_move_p[1] - offset_move[1]
-            ]
-            self.canvas_piece.move_axes_machine(self.derniere_pos_piece, not_calc_new=False) # 🎨 Dessine le mobile
-
-        else:
-            # 📱 MODE : Burin Mobile (Inspection)
-            # La pièce est fixe
-            self.derniere_pos_piece = self.last_move_p
-            self.canvas_piece.move_axes_machine(self.derniere_pos_piece, not_calc_new=False) # 🎨 Dessine le fixe
-            
-            # Le burin glisse
-            self.derniere_pos_outil = [
-                self.last_move_t[0] + offset_move[0],
-                self.last_move_t[1] + offset_move[1]
-            ]
-            self.canvas_outil.move_axes_machine(self.derniere_pos_outil, not_calc_new=False) # 🎨 Dessine le mobile
-
-    def on_touch_down(self, touch):
-        # On va chercher la case virtuelle de gauche
-        repere_gauche = self.ids.get("box_calcul_gauche")
-        
-        # 🛡️ DOUANE : On n'agit que si le clic s'est produit dans les 75% de gauche
-        if repere_gauche and repere_gauche.collide_point(*touch.pos):
-            # Mémorisation du point de départ du geste directement dans le dictionnaire du touch
-            touch.ud['initial_pos'] = touch.pos
-            return True # On intercepte l'événement (il ne traversera pas vers d'autres calques)
-            
-        # Si c'est à droite, on laisse Kivy propager le clic normalement vers les boutons
-        return super().on_touch_down(touch)
-
-    def on_touch_move(self, touch):
-        repere_gauche = self.ids.get("box_calcul_gauche")
-        
-        # Si on glisse dans la zone de gauche et qu'on a un point de départ valide
-        if repere_gauche and repere_gauche.collide_point(*touch.pos) and 'initial_pos' in touch.ud:
-            # Calcul de l'incrément en pixels purs
-            dx = touch.x - touch.ud['initial_pos'][0]
-            dy = touch.y - touch.ud['initial_pos'][1]
-            
-            # Application directe sur notre manette écran (Zéro transfert de variable complexe !)
-            self.offset_screen[0] += dx
-            self.offset_screen[1] += dy
-            
-            # Transmission instantanée à nos deux moteurs de tracés indépendants
-            self.canvas_outil.update_offset(offset_screen=self.offset_screen)
-            self.canvas_piece.update_offset(offset_screen=self.offset_screen)
-            
-            # Mise à jour de la position de référence pour la prochaine frame du glisser
-            touch.ud['initial_pos'] = touch.pos
-            return True
-            
-        return super().on_touch_move(touch)
-
-    def OLD_set_profil_pieces(self, fao_list=None, cao_list=None):
-        """
-        DISTRIBUTEUR GÉOMÉTRIQUE : Injecte et re-peint les entités via le canal officiel.
-        Utilise update_size_entities() pour respecter le format (None=inchangé, []=vider)
-        et préserve STRICTEMENT le zoom (scale) et l'offset actuel de l'opérateur.
-        """
-        import common_draw as cdraw # Ton module géométrique
-
-        # 🟢 1. COUCHE DESSUS : LE PROFIL DE PRODUCTION (FAO)
-        fao_prepares = None
-        if fao_list is not None:
-            if len(fao_list) > 0:
-                # La liste contient des segments -> on applique ton pistolet à peinture VERT
-                fao_prepares = cdraw.re_paint_entities(
-                    raw_list=fao_list,
-                    reverse=False,
-                    default_color=(0.1, 0.8, 0.1, 1), # Vert fluo DRO
-                    error_color=(1, 0, 0, 1)          # Rouge de sécurité
-                )
-            else:
-                # La liste reçue est explicitement vide [] -> on prépare un tableau vide []
-                fao_prepares = []
-
-        # 🔴 2. COUCHE DESSOUS : LE MODÈLE THÉORIQUE DE RÉFÉRENCE (CAO)
-        cao_prepares = None
-        if cao_list is not None:
-            if len(cao_list) > 0:
-                # La liste contient des segments -> on applique ton pistolet à peinture ROUGE
-                cao_prepares = cdraw.re_paint_entities(
-                    raw_list=cao_list,
-                    reverse=False,
-                    default_color=(0.5, 0.1, 0.1, 0.8), # Rouge bordeaux
-                    error_color=(1, 0, 0, 1)            # Rouge vif
-                )
-            else:
-                # La liste reçue est explicitement vide [] -> on prépare un tableau vide []
-                cao_prepares = []
-
-        # 🎯 3. INJECTION OFFICIELLE VIA LES ENTONNOIRS DE PROFILCANVAS
-        self.canvas_piece.update_size_entities(box_dest=None, a_entities=fao_prepares, b_entities=cao_prepares)
-
-        print("[GRAPHIC] Profils synchronisés via update_size_entities (Zoom & Pan préservés).")
-
-    '''
-
-
     # =====================================================================
     # 🎛️ LES MANETTES D'ACTIONS DU PANNEAU DROIT (BOUTONS .KV CONNECTÉS)
     # =====================================================================
@@ -786,7 +521,24 @@ class DroGraph(BoxLayout):
         le double profil (A + B) dans le cadre, et l'impose à TOUS les canvas.
         """
         # 1. Calcul de l'échelle idéale sur l'unique photo géométrique
-        new_scale = self.canvas_piece.search_auto_scale(code_entities="A + B", margin=[0.1, 0.1])
+        new_scale = self.canvas_piece.search_auto_scale(code_entities="A + B", margin=[0.03, 0.05])
+        
+        if new_scale:
+            # 2. 🎯 ALLIGNEMENT TOTAL : On distribue la même échelle aux deux canvas d'un coup !
+            self.canvas_piece.set_scale(new_scale, auto_scale=False)
+            self.canvas_outil.set_scale(new_scale, auto_scale=False)
+            
+            # 3. Synchronisation de la variable maîtresse locale
+            self.scale = new_scale
+            
+        return new_scale
+
+    def zoom_def_piece(self):
+        """
+        Action unique : Applique le zoom par défaut 
+        """
+        # 1. Calcul de l'échelle idéale sur l'unique photo géométrique
+        new_scale = self.scale_def
         
         if new_scale:
             # 2. 🎯 ALLIGNEMENT TOTAL : On distribue la même échelle aux deux canvas d'un coup !
@@ -800,49 +552,54 @@ class DroGraph(BoxLayout):
 
     def declencher_recentrage(self, ratio=None):   
         """
-        Action unique : recentre le dessin selon le mode actif.
-        - Piece_Mobile (True) : Fixe le point 0,0 du burin sur le ratio écran.
-        - Burin_Mobile (False) : Fixe le centre géométrique de la pièce sur le ratio écran.
+        🎯 RECENTRAGE ADAPTATIF CONFORME ATELIER :
+        - Mode Usinage (Burin Fixe)  ➔ Bec de coupe [0,0] rigoureusement aligné sur le ratio pixels.
+        - Mode Inspection (Pièce Fixe) ➔ Centre géométrique du profil CAO centré dans le viseur.
         """
         # 1️⃣ Gestion et mémorisation du ratio d'écran demandé (ex: [0.5, 0.5] ou [0.75, 0.25])
         if ratio is not None:
-            self.offset_base = ratio
+            offsetratio = ratio
         elif not hasattr(self, 'offset_base') or self.offset_base is None:
-            self.offset_base = [0.5, 0.5]
+            offsetratio = self.offset_base = [0.5, 0.5]
+        else:
+            offsetratio = self.offset_base
 
-        # 2️⃣ Réinitialisation propre des mouvements de la souris
+        # 2️⃣ Réinitialisation propre des mouvements manuels de la souris
         self.offset_screen = [0.0, 0.0]
 
-        # 3️⃣ AIGUILLAGE CINÉMATIQUE CONFORME À TES ÉQUATIONS 60Hz
+        # 3️⃣ AIGUILLAGE CINÉMATIQUE INTERACTIF VERROUILLÉ
         if self.move_mode:
-            # MODE USINAGE (Piece_Mobile = True): Le burin revient pile sur le 0,0 de l'ancrage écran (offset_0)
+            # 🟢 MODE USINAGE (Piece_Mobile = True | Burin Fixe) :
+            # Le bec de coupe de l'outil (0,0) s'aligne strictement sur les pixels de l'ancre.
+            # L'accumulateur reste vierge à zéro, laissant la boucle 60Hz piloter le glissement inverse.
             self.pos_change_move_mode = [0.0, 0.0]
-            print(f"[DRO] Recentrage Usinage : Burin calé sur le ratio {self.offset_base}. Pièce mobile.")
+            #print(f"[DRO] Recentrage Usinage : Bec de coupe [0,0] aligné sur le ratio {offsetratio}. Pièce mobile.")
             
         else:
-            # MODE INSPECTION (Burin_Mobile = False)
-            # On extrait le centre géométrique réel de la pièce en microns (par-rapport au pnt [0,0])
+            # 🔵 MODE INSPECTION (Burin_Mobile = False | Pièce Fixe) :
+            # On extrait le centre géométrique réel de la silhouette CAO en microns
             infos_centre = self.canvas_piece.get_center_draw()
-            inv_center_um = [infos_centre["center_um"][0] * -1.0, infos_centre["center_um"][1] * -1.0]
+            center_um = infos_centre.get("center_um", [0.0, 0.0])
             
-            # On recule l'accumulateur du calque de la valeur exacte du centre
-            self.pos_change_move_mode = inv_center_um
-            print(f"[DRO] Recentrage Inspection : Centre pièce [{infos_centre['center_um'][0]}, {infos_centre['center_um'][1]}] calé au milieu. Burin mobile.")
+            # On recule l'accumulateur du calque de la valeur exacte du centre (Votre formule d'origine parfaite !)
+            self.pos_change_move_mode = [
+                center_um[0] * -1.0,
+                center_um[1] * -1.0
+            ]
+            print(f"[DRO] Recentrage Inspection : Centre silhouette [{center_um[0]:.1f}, {center_um[1]:.1f}]µm calé au milieu.")
 
-        # 4️⃣ TRANSMISSION SYNCHRONE AUX DEUX CALQUES GRAPHIC
-        # On remet à plat la souris (0,0) et on impose le ratio. 
-        # update_offset va forcer la peinture immédiate de ton ProfilCanvas.
-        self.canvas_piece.update_offset(offset_screen=self.offset_screen, offset_base=self.offset_base, not_calc_new=False)
-        self.canvas_outil.update_offset(offset_screen=self.offset_screen, offset_base=self.offset_base, not_calc_new=False)
+        # 4️⃣ TRANSMISSION EN CASCODE AUX CALQUES GRAPHICS
+        self.canvas_piece.update_offset(offset_screen=self.offset_screen, offset_base=offsetratio, not_calc_new=False)
+        self.canvas_outil.update_offset(offset_screen=self.offset_screen, offset_base=offsetratio, not_calc_new=False)
 
-        #print("[GRAPHIC] Recentrage global exécuté sur tous les calques.")
-        print(f"[Recentrage offset] base: {self.offset_base}; screen: {self.offset_screen}; move: {self.offset_move}")
-        print(f" liste des segments:\n{self.canvas_piece.b_entities}")
+        # 5️⃣ Synchronisation forcée immédiate pour appliquer le saut de pixels à l'écran
+        if hasattr(self, "distribuer_mouvements_canvas"):
+            self.distribuer_mouvements_canvas(self.offset_move)
 
     # =====================================================================
     # 🖱️ CAPTURE CENTRALISÉE DE L'IHM (MOLETTE SOURIS / CLICK / TACTILE)
     # =====================================================================
-    def on_touch_down(self, touch):
+    def OLD_on_touch_down(self, touch):
         # On va chercher la case virtuelle de gauche (85%) ("Le BoxLayoute")
         repere_gauche = self.ids.get("box_calcul_gauche")
         
@@ -851,7 +608,7 @@ class DroGraph(BoxLayout):
             
             # 🔍 CAS A : L'OPÉRATEUR FAIT TOURNER LA MOLETTE VERS LE HAUT (Zoom +)
             if touch.is_mouse_scrolling and touch.button == 'scrollup':
-                nouvelle_echelle = self.canvas_piece.scale * 1.10
+                nouvelle_echelle = self.canvas_piece.scale * 0.95
                 
                 # 🎯 DISTRIBUTION SYNCHRONE SUR LES DEUX CALQUES
                 self.canvas_piece.set_scale(scale=nouvelle_echelle, auto_scale=False)
@@ -862,7 +619,7 @@ class DroGraph(BoxLayout):
 
             # 🔍 CAS B : L'OPÉRATEUR FAIT TOURNER LA MOLETTE VERS LE BAS (Zoom -)
             elif touch.is_mouse_scrolling and touch.button == 'scrolldown':
-                nouvelle_echelle = self.canvas_piece.scale * 0.90
+                nouvelle_echelle = self.canvas_piece.scale * 1.06
                 
                 # 🎯 DISTRIBUTION SYNCHRONE SUR LES DEUX CALQUES
                 self.canvas_piece.set_scale(scale=nouvelle_echelle, auto_scale=False)
@@ -872,6 +629,7 @@ class DroGraph(BoxLayout):
                 return True
 
             # 🔍 CAS C : CLIC STANDARD / COMMENCEMENT D'UN GESTE TACTILE
+            
             else:
                 # Mémorisation du point de départ du geste dans le touch
                 touch.ud['initial_pos'] = touch.pos
@@ -879,8 +637,7 @@ class DroGraph(BoxLayout):
             
         # Si c'est à droite (panneau fumé), on laisse Kivy propager normalement vers les boutons
         return super().on_touch_down(touch)
-
-    def on_touch_move(self, touch):
+    def OLD_on_touch_move(self, touch):
         repere_gauche = self.ids.get("box_calcul_gauche")
         
         # Si on glisse dans la zone de gauche et qu'on a un point de départ valide
@@ -903,7 +660,98 @@ class DroGraph(BoxLayout):
             return True
             
         return super().on_touch_move(touch)
+    # NEW Version ----------------------------------------------------------
+    # Dans votre __init__(self, **kwargs):
+    # Ajoutez cette ligne pour lister les doigts posés sur l'écran
+    # self.doigts_actifs = []
 
+    def on_touch_down(self, touch):
+        repere_gauche = self.ids.get("box_calcul_gauche")
+        
+        if repere_gauche and repere_gauche.collide_point(*touch.pos):
+            
+            # 1. GESTION DE LA SOURIS (Déjà ajustée par vos soins !)
+            if touch.is_mouse_scrolling:
+                if touch.button == 'scrollup':
+                    nouvelle_echelle = self.canvas_piece.scale * 0.95
+                elif touch.button == 'scrolldown':
+                    nouvelle_echelle = self.canvas_piece.scale * 1.06
+                    
+                self.canvas_piece.set_scale(scale=nouvelle_echelle, auto_scale=False)
+                self.canvas_outil.set_scale(scale=nouvelle_echelle, auto_scale=False)
+                self.scale = self.canvas_piece.scale
+                return True 
+
+            # 2. GESTION DU TACTILE (Enregistrement des doigts)
+            # On ajoute le doigt actuel à notre liste s'il n'y est pas déjà
+            if touch not in self.doigts_actifs:
+                self.doigts_actifs.append(touch)
+
+            # Si c'est le tout premier doigt, on amorce le glissement standard
+            if len(self.doigts_actifs) == 1:
+                touch.ud['initial_pos'] = touch.pos
+                
+            # Si un deuxième doigt arrive, on calcule la distance initiale entre les deux
+            elif len(self.doigts_actifs) == 2:
+                d1 = self.doigts_actifs[0].pos
+                d2 = self.doigts_actifs[1].pos
+                # Formule mathématique simple de distance entre deux points
+                self.distance_initiale_doigts = ((d1[0] - d2[0])**2 + (d1[1] - d2[1])**2)**0.5
+
+            return True 
+            
+        return super().on_touch_down(touch)
+
+
+    def on_touch_move(self, touch):
+        repere_gauche = self.ids.get("box_calcul_gauche")
+        
+        if repere_gauche and repere_gauche.collide_point(*touch.pos):
+            
+            # 🛡️ CAS MULTI-TOUCH : L'opérateur utilise 2 doigts (ZOOM TACTILE)
+            if len(self.doigts_actifs) == 2:
+                d1 = self.doigts_actifs[0].pos
+                d2 = self.doigts_actifs[1].pos
+                nouvelle_distance = ((d1[0] - d2[0])**2 + (d1[1] - d2[1])**2)**0.5
+                
+                # On calcule le ratio d'écartement
+                if self.distance_initiale_doigts > 0:
+                    ratio = nouvelle_distance / self.distance_initiale_doigts
+                    
+                    # On applique ce ratio à l'échelle actuelle
+                    nouvelle_echelle = self.canvas_piece.scale * ratio
+                    
+                    # On met à jour vos deux moteurs
+                    self.canvas_piece.set_scale(scale=nouvelle_echelle, auto_scale=False)
+                    self.canvas_outil.set_scale(scale=nouvelle_echelle, auto_scale=False)
+                    self.scale = self.canvas_piece.scale
+                    
+                    # Trame suivante : la distance actuelle devient la référence
+                    self.distance_initiale_doigts = nouvelle_distance
+                return True
+
+            # 🛡️ CAS MONO-TOUCH : Un seul doigt glisse (Votre code d'origine intact)
+            elif len(self.doigts_actifs) == 1 and 'initial_pos' in touch.ud:
+                dx = touch.x - touch.ud['initial_pos'][0]
+                dy = touch.y - touch.ud['initial_pos'][1]
+                
+                self.offset_screen[0] += dx
+                self.offset_screen[1] += dy
+                
+                self.canvas_piece.update_offset(offset_screen=self.offset_screen, not_calc_new=False)
+                self.canvas_outil.update_offset(offset_screen=self.offset_screen, not_calc_new=False)
+                
+                touch.ud['initial_pos'] = touch.pos
+                return True
+                
+        return super().on_touch_move(touch)
+
+
+    def on_touch_up(self, touch):
+        # ⚠️ TRÈS IMPORTANT : Quand l'opérateur relève un doigt, on le retire de la liste
+        if touch in self.doigts_actifs:
+            self.doigts_actifs.remove(touch)
+        return super().on_touch_up(touch)
 
 class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
     def __init__(self, part, cutter, machine, **kwargs):
@@ -918,6 +766,10 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
         super().__init__(**kwargs)
 
     def on_kv_post(self, base_widget):
+        '''from common_draw import normalize_color 
+        test= "#412B21"
+        tester_couleur = normalize_color(test)
+        pause = True'''
         """
         DÉCLENCHEUR SÉCURISÉ : Le châssis de base .kv est prêt en mémoire.
         On injecte nos modules spécifiques en pur Python sans risquer de bug .kv !
@@ -939,8 +791,8 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
         # 3️⃣ LIAISON DES IDENTIFIANTS DE TON CODE HISTORIQUE
         # Puisque les widgets ont été créés en Python, on mappe leurs boutons/champs manuellement
         self.axes_head = {
-            "vert": header.ids.header_vert,
-            "hor": header.ids.header_hor,
+            "vert3": header.ids.header_vert,
+            "hor3": header.ids.header_hor,
             "sup": header.ids.header_sup
         }
         
@@ -972,8 +824,16 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
             graph.set_profil_pieces(
                 box=True, 
                 fao_list=[], 
-                cao_list=App.get_running_app().part.profil_segments
+                cao_list=App.get_running_app().part.curent_profile_seg_net
             )
+
+            # TODO: Test cutter
+            graph.set_profil_cutter(
+                box=True, 
+                offset_draw=[], 
+                cut_draw=App.get_running_app().part.curent_profile_seg_net
+            )
+
         positions_initiales = self.machine.generer_dictionnaire_dro()
         self.update_axes_val(positions_initiales)
 
@@ -997,8 +857,8 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
                     box_axe.ax_dim.new_val(val)
 
         # C. PROPAGATION DES MICRONS VERS LE DESSIN DRO (Ton DroGraph)
-        microns_hor = data.get("hor", 0.0)
-        microns_vert = data.get("vert", 0.0)
+        microns_hor = data.get("hor3", 0.0)
+        microns_vert = data.get("vert3", 0.0)
         self.ids.graph_box.distribuer_mouvements_canvas([microns_hor, microns_vert])
 
     #ÉCRAN
@@ -1010,12 +870,6 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
         """
         app_vivante = App.get_running_app()
         
-        # 1️⃣ SYNCHRONISATION VISUELLE DE L'ONGLET LATÉRAL DE LA BARRE COMMUNE
-        if 'tools_bar' in self.ids:
-            tb = self.ids.tools_bar
-            if 'btn_fao' in tb.ids: tb.ids.btn_fao.set_status(1) # DRO s'allume en vert clair
-            if 'btn_cao' in tb.ids: tb.ids.btn_cao.set_status(0) # CAO repasse au neutre
-
         # 2️⃣ GESTION ET MISE À JOUR DU VISUALISEUR GRAPHIQUE
         if 'graph_box' in self.ids:
             graph = self.ids['graph_box']
@@ -1023,14 +877,17 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
             # A. Rafraîchissement textuel du nom de la pièce CAO dans le panneau droit (15% fumé)
             if 'cao_name_lbl' in graph.ids:
                 graph.ids.cao_name_lbl.text = app_vivante.part.get_part_name()
+                #print(f"[DEBUG DroFocused] part name: {app_vivante.part.get_part_name()}")
 
             # B. 🎯 L'INJECTION OFFICIELLE (Le chaînon manquant à jour !)
             # On prend la liste longue de ton PointManager et on l'envoie au distributeur
-            if hasattr(app_vivante.part, 'profil_segments'):
-                # On passe la liste dans la zone FAO (premier argument). 
-                # Ton DroGraph se chargera de la repeindre en vert et de l'injecter via update_size_entities
-                graph.set_profil_pieces(box=True, fao_list=None, cao_list=app_vivante.part.profil_segments)
-
+            if hasattr(app_vivante.part, 'curent_profile_seg_net'):                
+                # 🚀 ENTIÈREMENT CORRIGÉ : On injecte notre calque CAO actif à jour
+                graph.set_profil_pieces(
+                    box=True, 
+                    fao_list=None, 
+                    cao_list=app_vivante.part.curent_profile_seg_net
+                )
             # C. Relance instantanée du pinceau rapide à 60Hz pour ré-aligner les microns machine
             donnees_initiales = self.machine.generer_dictionnaire_dro()
             microns_hor = donnees_initiales.get("hor", 0.0)
@@ -1039,33 +896,6 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
             
         print("[PAGE DRO] Réveil autonome exécuté via set_profil_pieces (Zoom & Pan préservés).")
 
-
-    #OLD
-    def OLD_update_axes_val(self, data):
-        # Exemple: data = {"X": 789, "Y": 7890123, "Z": -123}
-        for name, val in data.items():
-            if name in self.axes_head:
-                self.axes_head[name].ax_dim.new_val(val)
-                #print(f"TEST update_axes_val: axes_head {self.axes_head[name].ax_dim.name_txt} value: {self.axes_head[name].ax_dim.value_txt} {self.axes_head[name].ax_dim.val_unit} / diam: {self.axes_head[name].ax_dim.val_diam}")
-            if name in self.axes_dro:
-                # TODO: à màj une fois la box faite
-                pass
-    def NEWOLD_update_axes_val(self, data):
-        """Boucle de rafraîchissement à 60Hz appelée par le main.py."""
-        # A. Mise à jour des petits pavés de l'en-tête haute
-        for name, val in data.items():
-            if name in self.axes_head:
-                self.axes_head[name].ax_dim.new_val(val)
-                
-            # B. Mise à jour des gros chiffres du boîtier DroDro
-            if name in self.axes_dro:
-                self.axes_dro[name].new_val(val)
-
-        # 🎯 C. PROPAGATION DES MICRONS VERS LE DESSIN DRO (Ton DroGraph)
-        microns_hor = data.get("hor", 0.0)
-        microns_vert = data.get("vert", 0.0)
-        self.ids.graph_box.distribuer_mouvements_canvas([microns_hor, microns_vert])
-   
 
 
 Builder.load_file("dro_viewer.kv")

@@ -7,8 +7,7 @@ class ShapeManager:
     def __init__(self):
         self.shape_registry_list = sr.shape_templates
 
-    #def create_shape(self, pos_a, entry_b, pos_c, shape_typ=None, params=None, mirror_z=False):
-    def create_shape(self, pos_a, entry_b, pos_c, shape_typ=None, shape_params={}, mirror_z=False):
+    def create_shape(self, pos_a, entry_b, pos_c, shape_typ=None, shape_params={}):
         """
         Crée une forme selon le type et sous-type, et retourne l'objet de la forme.
         """
@@ -19,8 +18,7 @@ class ShapeManager:
         # Si aucun type de forme n'est spécifié, on retourne une forme vide (BaseShape)  
         if shape_typ is None:     
             self.shape_form_link = BaseShape(
-                point_a=pos_a, entry_b=entry_b, point_c=pos_c, 
-                mirror_z=mirror_z, registry=self.shape_registry_list
+                point_a=pos_a, entry_b=entry_b, point_c=pos_c,
             )
             self.shape_form_link.satus = 0
             self.shape_form_link.shape_type = [None, {}]
@@ -32,8 +30,7 @@ class ShapeManager:
         shape_info = self.shape_registry_list.get(shape_grp1)
         if shape_info is None:
             self.shape_form_link = BaseShape(
-                point_a=pos_a, entry_b=entry_b, point_c=pos_c, 
-                mirror_z=mirror_z, registry=self.shape_registry_list
+                point_a=pos_a, entry_b=entry_b, point_c=pos_c,
             )
             self.shape_form_link.satus = 1
             self.shape_form_link.shape_type = [None, {}]
@@ -44,8 +41,7 @@ class ShapeManager:
         subtype_info = shape_info.get('subtypes', {}).get(shape_grp2)
         if subtype_info is None:
             self.shape_form_link = BaseShape(
-                point_a=pos_a, entry_b=entry_b, point_c=pos_c, 
-                mirror_z=mirror_z, registry=self.shape_registry_list
+                point_a=pos_a, entry_b=entry_b, point_c=pos_c,
             )
             
             self.shape_form_link.satus = 2
@@ -57,8 +53,7 @@ class ShapeManager:
         shape_class = subtype_info.get('class')
         if shape_class is None:
             self.shape_form_link = BaseShape(
-                point_a=pos_a, entry_b=entry_b, point_c=pos_c, 
-                mirror_z=mirror_z, registry=self.shape_registry_list
+                point_a=pos_a, entry_b=entry_b, point_c=pos_c,
             )            
             self.shape_form_link.satus = 3
             self.shape_form_link.shape_type = [shape_grp1, shape_grp2]
@@ -67,8 +62,7 @@ class ShapeManager:
         
         # Création de l'instance de la forme avec ou sans paramètres supplémentaires
         self.shape_form_link = shape_class(
-            point_a=pos_a, entry_b=entry_b, point_c=pos_c, 
-            mirror_z=mirror_z   #, registry=self.shape_registry_list
+            point_a=pos_a, entry_b=entry_b, point_c=pos_c,
         )
         self.shape_form_link.satus = 95
         self.shape_form_link.shape_type = [shape_grp1, shape_grp2]

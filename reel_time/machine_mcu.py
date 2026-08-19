@@ -8,7 +8,7 @@ import serial  # Fourni par le package pyserial
 import json
 import os
 
-from config import save_json_with_format
+from configurator.config import save_json_with_format
 
 
 class CommManager():
@@ -880,15 +880,6 @@ class CommManager():
 
         # On retourne le nombre de lignes et les octets
         return len(self.segments_fao), buffer_binaire_final
-    def OBSOLET_a_controler__send_profil_to_mcu(self, point_manager):
-        self.nb_segments_actifs, self.buffer_binaire = self.compiler_et_sauvegarder_profil_machine(point_manager)
-        
-        # ... (votre code d'envoi physique USB ou Wi-Fi) ...
-        envoi_reussi = True 
-
-        if envoi_reussi:
-            point_manager.mcu_synchronise = True
-            print("[COMM] Synchronisation matérielle validée avec le MCU.")
 
     #Restauration rapide (au démarrage) depuis le json existant pour continuer l'usinage en cas de crach de Kivy
     def _restaurer_fao_depuis_json(self):

@@ -1,6 +1,12 @@
 # machine_tool/machine_data.py
+
+import os
 import time
-from config import SETTINGS
+import math
+from kivy.lang import Builder
+from kivy.uix.boxlayout import BoxLayout
+from configurator.config import SETTINGS, format_unit
+from screen_base.common_screen import BaseScreenLayout
 
 class MachineState:
     def __init__(self):
@@ -56,21 +62,41 @@ class MachineState:
         self.ack_msg_id = -1
         self.ack_octets_recus = -1
 
+    def build_next_urgence(self):   # A faire après "reprise rapide après crach", mais avant l'init des écrans
+        axis_cfg = SETTINGS.get("axis", {})
+        fl_x_mach = float(self.x_machine)
+        fl_y_mach = float(self.y_machine)
+        fl_z_mach = float(self.z_machine)
+
+        self.y_rad_float = float(format_unit(float(axis_cfg.get("sup", {}).get("angle", 0)), "rad"))
+        self.hor3_base = int(fl_z_mach + fl_y_mach* math.cos(self.y_rad_float))
+        self.vert3_base = int(fl_x_mach + fl_y_mach* math.sin(self.y_rad_float))
+
+
     def generer_dictionnaire_dro(self):
         """Envoie les valeurs de base brutes."""
+        self.calc_hor3_vert3()  # Màj du diamètre toal et longueur total
+
         return {
             "vert": self.x_machine,
             "hor": self.z_machine,
             "sup": self.y_machine,
-            "s": self.spindle_machine
+            "s": self.spindle_machine,
+            "vert3": self.vert3_base,
+            "hor3": self.hor3_base
         }
-    
-    def OBSOLET_mettre_a_jour_positions(self, z, x, y, spindle):
-        """Appelé par le décodeur binaire pour rafraîchir les cotes en microns."""
-        self.z_machine = z
-        self.x_machine = x
-        self.y_machine = y
-        self.spindle_machine = spindle
+
+    def calc_hor3_vert3(self):
+        import math
+        axis_cfg = SETTINGS.get("axis", {})
+        fl_x_mach = float(self.x_machine)
+        fl_y_mach = float(self.y_machine)
+        fl_z_mach = float(self.z_machine)
+
+        self.y_rad_float = float(format_unit(float(axis_cfg.get("sup", {}).get("angle", 0)), "rad"))
+        self.hor3_base = int(fl_z_mach + fl_y_mach* math.cos(self.y_rad_float))
+        self.vert3_base = int(fl_x_mach + fl_y_mach* math.sin(self.y_rad_float))
+
 
     def alerte_time_msg_in(self, receve_time, receve_source):
         """
@@ -115,32 +141,6 @@ class MachineState:
                     print(f"[🚨 ALERTE] Commande coupée. Aucun message depuis {int(self.delai_perte_comm_sec * 1000)} ms.")
                     
                     # TODO: Injecter l'affichage de votre Pop-up ou bandeau rouge Kivy ici
-
-    def OBSOLET_end_time_flag_diag_wifi(self, dt=None):
-        """
-        Sécurité de Timeout Diagnostic.
-        Appelée automatiquement par l'horloge Clock Kivy après 1.5 seconde.
-        Si le drapeau est encore True, c'est que le boîtier n'a pas répondu.
-        """
-        if self.attente_diagnostic_wifi:
-            # 1. Coupure immédiate du mode double écoute (Fermeture de l'offset 300)
-            self.attente_diagnostic_wifi = False
-            
-            # 2. Nettoyage de la commande pour éviter les boucles infinies
-            self.pong_wifi = False
-            
-            # 3. Déclenchement de l'alerte console
-            print("[🚨 ALERTE] TIMEOUT DIAGNOSTIC : Le module Wi-Fi de la machine ne répond pas !")
-            
-            # TODO : Ouvrir votre Pop-up graphique Kivy :
-            # "Le Wi-Fi de la machine ne répond pas ! Voulez-vous désactiver le Wi-Fi dans vos paramètres ?"
-            
-        else:
-            # Le drapeau est déjà à False. Cela prouve que 'traiter_pong_diagnostic' 
-            # a intercepté le Pong de l'ESP32 à temps et a déjà désactivé le flag.
-            print("[🟢 DIAG] Diagnostic réussi ! Le Wi-Fi de la machine est opérationnel.")
-            pass
-
 
     def save_json(self):
         pass
@@ -194,3 +194,32 @@ class Temporaire_a_modifier:
             print(f"[DIAG] Test Wi-Fi bidirectionnel lancé (Timeout: 1.5s).")
         else:
             print(f"[DIAG] Ordre de coupure Wi-Fi transmis. Quittancement attendu sur l'USB.")
+
+
+Builder.load_file(os.path.join(os.path.dirname(__file__), "machine_data.kv")) 
+
+
+class McuPageHeader(BoxLayout):
+    pass
+
+class McuPageDashboard(BoxLayout):
+    pass
+
+class McuPageManager(BaseScreenLayout):
+    """ 💪 L'ÉCRAN DE DIAGNOSTIC DES MUSCLES MACHINE (Entrées/Sorties, température ESP32) """
+    
+    def on_kv_post(self, base_widget):
+        # Pour TESTE dans screen_focused()
+        self.actuel_status = 0  # variable représantant l'index de la liste de status
+
+        header = McuPageHeader()
+        # Injection avec l'icône des muscles de la machine !
+        self.injecter_entete_specifique(header)
+        
+        dashboard = McuPageDashboard()
+        self.injecter_corps_specifique(dashboard)
+
+    def screen_focused(self):
+
+        print("[PAGE MCU] Focus reçu. Monitoring matériel actif.")
+        pass

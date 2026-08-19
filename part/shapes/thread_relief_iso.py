@@ -6,7 +6,7 @@ Description :
     Représente une gorge de filetage ISO, construite entre trois points (A, B, C) et à partir de paramètres géométriques.
 
     Comportement :
-    - shape_type = ['filet_gorge', 'ISO']
+    - shape_type = ['gorge', 'filet_ISO']
     - Utilise compute_geometry() pour générer les entités géométriques de la gorge (ligne, arcs).
     - Les entités sont accessibles via get_entities().
     - Les points de début et de fin de forme sont stockés dans self.shape_start et self.shape_end, 
@@ -34,13 +34,14 @@ import copy
 #from i18n import tr, Tr, TR  # La fonction de traduction importée tr>> tel que la traduction; Tr première lettre en majuscule; TR tous en majuscule
 from .base_shape import BaseShape
 from common_widgets import LabeledCell, InputCell, MyLabel, Separator, GroupHeader, STATUS_VALIDE,STATUS_ERREUR,STATUS_NEUTRE,STATUS_INACTIF
-import config as conf
+import configurator.config as conf
 import common_draw as cd
 from ui_configurator.theme_manager import draw_line as th_drl
 
 
 class ThreadReliefISOShape(BaseShape):
-    shape_type = ['filet_gorge', 'ISO']
+    shape_type = ['gorge', 'filet_ISO']     # Identification du type et sub-type
+    shape_text = ['Gorge', 'Filetage ISO']  # Type et sub-type afficher dans les spinners de sélection
     val_default = {
         'largeur': 4500, 
         'profondeur': 1500, 
@@ -51,7 +52,7 @@ class ThreadReliefISOShape(BaseShape):
         "ref_appuis":"B-A"
     }
 
-    def __init__(self, point_a, entry_b, point_c, mirror_z=False):
+    def __init__(self, point_a, entry_b, point_c):
         """
         Initialisation de la forme ThreadReliefISOShape.
 
@@ -59,7 +60,7 @@ class ThreadReliefISOShape(BaseShape):
         :param entry_b: [PointEntry()] compet du point à éditer
         :param point_c: Coordonnée du point C (x, z).
         :param params: Paramètres supplémentaires de la forme (largeur, profondeur, etc.).
-        :param mirror_z: Option pour la symétrie selon l'axe Z (non utilisé ici).
+        # SUPPRIMÉ:param mirror_z: Option pour la symétrie selon l'axe Z (non utilisé ici).
         """
 
         # ceci dans BaseShape: self.entities_shape = entry_b
@@ -73,7 +74,7 @@ class ThreadReliefISOShape(BaseShape):
         entry_b["raw"]["shape_params"] = merged_params
         '''
         # Appel à l'init de la classe mère (BaseShape)
-        super().__init__(point_a, entry_b, point_c, mirror_z)
+        super().__init__(point_a, entry_b, point_c)
 
         self.params = self.entry.raw["shape_params"]   # mise à jour de la variable dans BaseShape
 
@@ -96,9 +97,7 @@ class ThreadReliefISOShape(BaseShape):
         """
         Construit les entités représentant la gorge de filetage ISO à partir des points A, B, C
         et des paramètres définis.
-        
-        
-        
+               
         self.entities_shape = []
 
         width = self.params.get("largeur")   # µm
@@ -126,8 +125,6 @@ class ThreadReliefISOShape(BaseShape):
         x_ref = self.point_b[0]
 
         """
-
-        self.entities_shape = []
 
         #fonctions internes
         def normalize_angle(angle):
@@ -205,7 +202,6 @@ class ThreadReliefISOShape(BaseShape):
         }
         axis_ba = direction_map.get(dir_ba, 0)
         axis_bc = direction_map.get(dir_bc, 0)
-
 
         def point_rotate_to_abs(point, angle=alpha_ba, point_ref=ref_abs):
             x, y = point
@@ -295,55 +291,45 @@ class ThreadReliefISOShape(BaseShape):
         pnt2 = point_rotate_to_abs(p2_ba)
         pnt1 = point_rotate_to_abs(p1_ba)
 
-        #Création de la liste brut des segments. (direction standart)
-        # --> Avec ajout des congés
-        entities = []   # Donné brut
-        A = self.point_c if dir_c else self.point_a
-        C = self.point_a if dir_c else self.point_c
-        entities.append({"type":"l", "start":A, "end":pnt3, "color":th_drl["liaison"]})
-        conge = cd.create_fillet(point_before=pnt3, point_intersect=pnt2, point_after=pnt1, radius=radius, dict_formated_auto=True)
-        conge["color"] = th_drl["detail"]
-        entities.append({"type":"d", "start":pnt3, "end":conge["start"], "color":th_drl["detail"], "vec_dir":[pnt2[0]-pnt3[0],pnt2[1]-pnt3[1]]})
-        entities.append(conge)
-        entities.append({"type":"l", "start":pnt2, "end":pnt1, "color":th_drl["detail"]})
-        conge = cd.create_fillet(point_before=pnt2, point_intersect=pnt1, point_after=ref_abs, radius=radius, dict_formated_auto=True)
-        conge["color"] = th_drl["detail"]
-        entities.append(conge)
-        #entities.append({"type":"l", "start":pnt1, "end":ref_abs, "color":th_drl["detail"]})
-        entities.append({"type":"d", "start":conge["end"], "end":ref_abs, "color":th_drl["detail"], "vec_dir":[ref_abs[0]-pnt1[0],ref_abs[1]-pnt1[1]]})
-        entities.append({"type":"l", "start":ref_abs, "end":C, "color":th_drl["liaison"]})
-        
-        # Initialisation de draw_part (pour le dessin de la pièce)
-        self.draw_part = []
-        firstentities = len(entities)-1
-        for idx, entity in enumerate(entities):
-            if idx == 0 or idx == firstentities: # ne pas inclure les lignes de liaison !
-                continue
-            _ent = copy.deepcopy(entity)
-            _ent["color"] = th_drl["profil"]
-            _ent["id_pnt"] = None
-
-            # Mise dans l'ordre des segments, avec invertion de direction du dessin !!!
-            if dir_c:
-                if "end" in _ent and "start" in _ent:
-                    _ent["end"], _ent["start"] = _ent["start"], _ent["end"]
-                    if "cw" in _ent:
-                        # Inverser le sens de rotation de l'arc
-                        _ent["cw"] = not _ent["cw"]
-                    if "dir" in _ent:
-                        _ent["dir"] = not _ent["dir"]
-                self.draw_part.insert(0, _ent)
-            else:
-                self.draw_part.append(_ent)
+        # NEW_Variante --------------------------------------------------------------------------------------------
+        #Création de la liste brut des segments. (direction dessin)
+        #entities = []   # Donné brut       #self.draw_part = [] # Donné brut sans liaison
+        if dir_c:
+            conge_sort = cd.create_fillet(point_before=ref_abs, point_intersect=pnt1, point_after=pnt2, radius=radius, dict_formated_auto=True)
+            conge_ent = cd.create_fillet(point_before=pnt1, point_intersect=pnt2, point_after=pnt3, radius=radius, dict_formated_auto=True)
+            self.draw_part = [{"type":"d", "start":ref_abs, "end":conge_sort["start"], "vec_dir":[pnt1[0]-ref_abs[0],pnt1[1]-ref_abs[1]]}]
+            self.draw_part.append(conge_sort)
+            self.draw_part.append({"type":"l", "start":pnt1, "end":pnt2})
+            self.draw_part.append(conge_ent)
+            self.draw_part.append({"type":"d", "start":conge_ent["end"], "end":pnt3, "vec_dir":[pnt3[0]-pnt2[0],pnt3[1]-pnt2[1]]})
+            entities = [{"type":"l", "start":self.point_c, "end":ref_abs}]
+            entities.extend(self.draw_part)
+            entities.append({"type":"l", "start":pnt3, "end":self.point_a})
+        else:
+            conge_ent = cd.create_fillet(point_before=pnt3, point_intersect=pnt2, point_after=pnt1, radius=radius, dict_formated_auto=True)
+            conge_sort = cd.create_fillet(point_before=pnt2, point_intersect=pnt1, point_after=ref_abs, radius=radius, dict_formated_auto=True)
+            self.draw_part = [{"type":"d", "start":pnt3, "end":conge_ent["start"], "vec_dir":[pnt2[0]-pnt3[0],pnt2[1]-pnt3[1]]}]
+            self.draw_part.append(conge_ent)
+            self.draw_part.append({"type":"l", "start":pnt2, "end":pnt1})
+            self.draw_part.append(conge_sort)
+            self.draw_part.append({"type":"d", "start":conge_sort["end"], "end":ref_abs, "vec_dir":[ref_abs[0]-pnt1[0],ref_abs[1]-pnt1[1]]})
+            entities = [{"type":"l", "start":self.point_a, "end":pnt3}]
+            entities.extend(self.draw_part)
+            entities.append({"type":"l", "start":ref_abs, "end":self.point_c})
 
         # Mise au format pour mon dessin 
         # --> Avec invertion de l'ordre des segments si n'écécaire (voir:"dir_c") 
-        # --> Format corespondant à ProfilDraw() 
+        # --> Format corespondant à ProfilCanvas() 
         # --> Les bbox sont calculés ajoutés par: create_entities_from_raw
-        self.entities_shape = cd.create_entities_from_raw(entities, dir_c, error_color=th_drl["erreur_detail"])    # donnés formatés pour dessin
+        entities_shape = cd.create_entities_from_raw(entities)    # donnés formatés pour dessin
+        entities_détail = cd.re_paint_entities(entities_shape,draw_type="detail",liaison_line=1)
         
+        self.shape_start = self.draw_part[0]["start"]
+        self.shape_end   = self.draw_part[-1]["end"]
         # Mettre à jour le dessin du détail
-        self.update_draw_shape(self.entities_shape)
+        self.update_draw_shape(entities_détail)
+
+        #print(f"[TEST_DEBUG] entities_détail: {entities_détail}")
 
     def get_shape_label_name(self):
         label_txt = f"filet ISO (D-{2*self.params.get("profondeur")/1000}/{self.params.get("largeur")/1000}/R{self.params.get("rayon_fond")/1000})"

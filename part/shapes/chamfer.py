@@ -3,7 +3,7 @@ from common_widgets import (
     STATUS_ERREUR, STATUS_NEUTRE, STATUS_VALIDE,
     LabeledToggleCell, GroupHeader, InputCell)
 from common_draw import (intersection_of_lines, normalize_vector, normalize_angle, is_clockwise, 
-        bissectrice_normalised, create_entities_from_raw, compute_angle_rad, dot_scalaire_vector)
+        bissectrice_normalised, create_entities_from_raw, re_paint_entities, compute_angle_rad, dot_scalaire_vector)
 from ui_configurator.theme_manager import draw_line as th_drl
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.togglebutton import ToggleButton
@@ -11,7 +11,7 @@ from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 from kivy.metrics import dp
 from functools import partial
-import config as conf
+import configurator.config as conf
 import math
 from copy import copy
 
@@ -35,13 +35,13 @@ class ChamferShape(BaseShape):
         "symetry": {"label_1": "Symétrique ABC", "label_2": None, "unit": "unit_angle", "default": True},
     }
 
-    def __init__(self, point_a, entry_b, point_c, mirror_z=False):
+    def __init__(self, point_a, entry_b, point_c):
 
         self.param_list = []    # contient self-params sous forme de liste
         self.input_widgets = {} # conteint les inputs de shape_config_box (quand il existent !)
         self.toggle_widgets = {} # conteint les boutons d'options de shape_config_box (quand il existent !)
 
-        super().__init__(point_a, entry_b, point_c, mirror_z, params_options_nbr=2)
+        super().__init__(point_a, entry_b, point_c, params_options_nbr=2)
 
         self.pntA = point_a
         self.pntB = entry_b
@@ -168,13 +168,13 @@ class ChamferShape(BaseShape):
     def compute_geometry(self):
         """À compléter avec la géométrie du chanfrein basée sur self.param_list"""
 
-        print("[DEBUG ChamferShape-Compute_geometry]======= START ================")
+        #print("[DEBUG ChamferShape-Compute_geometry]======= START ================")
 
         try:
             new_pos = self.resolve_reference_values()
         except ValueError as e:
             #self.log_error(f"Erreur de géométrie : {e}")
-            print(f"[DEBUG ChamferShape-Compute_geometry]>> Erreur de géométrie : {e}")
+            #print(f"[DEBUG ChamferShape-Compute_geometry]>> Erreur de géométrie : {e}")
             return
 
         self.geom_values = new_pos
@@ -183,7 +183,7 @@ class ChamferShape(BaseShape):
         if new_pos["pnt_aa"] is None or new_pos["pnt_cc"] is None:
             #raise ValueError(f"Erreur lors de la définission des points du chanfrein")
             #self.log_error("Erreur lors de la définition des points du chanfrein")
-            print(f"[DEBUG ChamferShape-Compute_geometry]>>Erreur lors de la définition des points du chanfrein")
+            #print(f"[DEBUG ChamferShape-Compute_geometry]>>Erreur lors de la définition des points du chanfrein")
             return
         
         point_aa= [self.point_b[0] + new_pos["pnt_aa"][0], self.point_b[1] + new_pos["pnt_aa"][1]]
@@ -193,18 +193,19 @@ class ChamferShape(BaseShape):
         self.config_shape_cell_value(new_pos)
 
         # Donné brut
-        self.draw_part= [{"type": "d", "start": point_aa,    "end": point_cc,  "color": th_drl["profil"], "id_pnt":None, "vec_dir":[0,0]}]  # id_pnt sera màj après depuis prof_seg_pnt_recompute()
+        self.draw_part= [{"type": "d", "start": point_aa, "end": point_cc, "vec_dir":[0,0]}] 
+        self.shape_start, self.shape_end = point_aa, point_cc
         entities = [
-            {"type": "l", "start": self.pntA,   "end": self.point_b,  "color": th_drl["liaison"]},
-            {"type": "d", "start": point_aa,    "end": point_cc,  "color": th_drl["detail"], "vec_dir":[0,0]},
-            {"type": "l", "start": self.point_b,    "end": self.pntC, "color": th_drl["liaison"]},
+            {"type": "l", "start": self.pntA,   "end": self.point_b},
+            {"type": "d", "start": point_aa,    "end": point_cc, "vec_dir":[0,0]},
+            {"type": "l", "start": self.point_b,"end": self.pntC},
         ]
         # donnés formatés pour dessin
-        self.entities_shape = create_entities_from_raw(entities, error_color=th_drl["erreur_detail"])
+        self.entities_shape = re_paint_entities(create_entities_from_raw(entities),"detail", 1)
         
         # Mettre à jour le dessin du détail
 
-        print(f"[DEBUG ChamferShape-Compute_geometry] self.entities_shape  : {self.entities_shape}")
+        #print(f"[DEBUG ChamferShape-Compute_geometry] self.entities_shape  : {self.entities_shape}")
         self.update_draw_shape(self.entities_shape)
 
     def resolve_reference_values(self):
@@ -262,12 +263,13 @@ class ChamferShape(BaseShape):
 
             cos_a = math.cos(angle)
             sin_a = math.sin(angle)
-            print(f" angle: {math.degrees(angle)}° | {angle}rad  | cos:{cos_a} , sin:{sin_a}")
-            angle_B =  angle * -1
-            cos_b = math.cos(angle_B)
-            sin_b = math.sin(angle_B)
-            print(f" angle_Inverce: {math.degrees(angle_B)}° | {angle_B}rad  | cos:{cos_b} , sin:{sin_b}")
-            #x, y = -base_vector[0], -base_vector[1]
+
+            #print(f" angle: {math.degrees(angle)}° | {angle}rad  | cos:{cos_a} , sin:{sin_a}")
+            #angle_B =  angle * -1
+            #cos_b = math.cos(angle_B)
+            #sin_b = math.sin(angle_B)
+            #print(f" angle_Inverce: {math.degrees(angle_B)}° | {angle_B}rad  | cos:{cos_b} , sin:{sin_b}")
+
             x, y = base_vector
 
             return (
@@ -337,7 +339,9 @@ class ChamferShape(BaseShape):
             # Définir la direction du chanfrein de a vers c et de c vers a (normal à la bissectrice)
             n_ac = (bisect[1], -bisect[0]) if not clockwise else  (-bisect[1], bisect[0])  # Rotation de 90°
             n_ca = (-n_ac[0], -n_ac[1])        
-            print(f" dir B->A:{n_ba} , dir B->C:{n_bc} | dir bisect:{bisect} | dir a-c:{n_ac} , dir c-a:{n_ca}")
+
+            #print(f" dir B->A:{n_ba} , dir B->C:{n_bc} | dir bisect:{bisect} | dir a-c:{n_ac} , dir c-a:{n_ca}")
+
             result["dir_chamfer"]= [n_ac,n_ca]
 
         
@@ -712,7 +716,6 @@ class ChamferShape(BaseShape):
                         val = int(round(math.degrees(val_t) * 1000))
                         if angle_in < 0:
                             val = -val
-                    print(f">>>>DEBUG_ Angle_a_cart = {val}")
                             
                 elif key == "ang_a" and dir_ca and dir_ba:
                     val_t = abs(compute_angle_rad(dir_ca, dir_ba))
@@ -857,7 +860,7 @@ class ChamferShape(BaseShape):
         dx = cc[0] - origin[0]
         dy = cc[1] - origin[1]
         len_out = (dx**2 + dy**2)**0.5
-        print(f"lenout:{len_out} | dir chanfrein:{dir_chamfer} | len_in:{len_in} | pos_aa:{aa} , pos_cc:{cc}")
+        #print(f"lenout:{len_out} | dir chanfrein:{dir_chamfer} | len_in:{len_in} | pos_aa:{aa} , pos_cc:{cc}")
         return {
             "len_in": len_in,
             "len_out": len_out,

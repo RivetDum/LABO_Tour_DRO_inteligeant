@@ -330,7 +330,7 @@ class ShapeEditor(Popup):
         self.shape_manager = ShapeManager()    # initialise ShapeManager()
         self.shape_form = self.shape_manager.create_shape(  # initialise la forme actuellement sélectionnée
             pos_a=a_pos, entry_b=point_b, pos_c=c_pos,
-            shape_typ=shape_type, shape_params = shape_params, mirror_z= mirror_z
+            shape_typ=shape_type, shape_params = shape_params
             )
         
         self.form = ParamForm(
@@ -443,7 +443,7 @@ class ShapeEditor(Popup):
         if shape_type != False:
             self.shape_form = self.shape_manager.create_shape(
                 pos_a=a_pos, entry_b=point_b, pos_c=c_pos,
-                shape_typ=shape_type, shape_params=shape_params, mirror_z=mirror_z
+                shape_typ=shape_type, shape_params=shape_params
             )
 
             # 2. Recharger tout

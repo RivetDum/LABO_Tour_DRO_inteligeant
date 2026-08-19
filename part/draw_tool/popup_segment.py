@@ -1,15 +1,16 @@
-# point_draw_popups.py
+# point_draw/ popups.py
     # Anciennement: popup_segment.py
 
 import math
 import copy
 from kivy.uix.popup import Popup
 from kivy.uix.widget import Widget
+from kivy.clock import Clock
+from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.button import Button
-from kivy.metrics import dp
 from kivy.uix.label import Label
 from kivy.uix.spinner import Spinner
 from kivy.uix.dropdown import DropDown
@@ -17,7 +18,7 @@ from kivy.uix.textinput import TextInput
 
 from common_widgets import MyLabel, Separator, GroupHeader, LabeledCell, InputCell, InputCellLabel, CustomSpinner, STATUS_NEUTRE, STATUS_INACTIF, STATUS_ERREUR, STATUS_VALIDE, STATUS_TRANSLICIDE
 from i18n import tr, Tr, TR  # La fonction de traduction importée tr>> tel que la traduction; Tr première lettre en majuscule; TR tous en majuscule
-from config import parse_user_input, get_unit_id, get_unit_config, switch_unit, get_all_units_for_type, AXIS_CONFIG
+from configurator.config import parse_user_input, get_unit_id, get_unit_config, switch_unit, get_all_units_for_type, AXIS_CONFIG
 
 
 class CalculatorPopup(Popup):
@@ -40,10 +41,10 @@ class CalculatorPopup(Popup):
     ROUGE_ANNULER = (0.8, 0.3, 0.3, 1)          # Correction locale CE
 
     BUTTONS_COLORS = [      # boutons de la grille de la calculatrice
-        GRIS_BOUTON, GRIS_BOUTON, GRIS_BOUTON, BRUN_ORANGE,
-        GRIS_BOUTON, GRIS_BOUTON, GRIS_BOUTON, BRUN_ORANGE,
-        GRIS_BOUTON, GRIS_BOUTON, GRIS_BOUTON, BRUN_ORANGE,
-        BLEU_BOUTON, GRIS_BOUTON, BLEU_BOUTON, BRUN_ORANGE
+        GRIS_BOUTON, GRIS_BOUTON, GRIS_BOUTON, BRUN_ORANGE,     #  7  |  8  |  9  |  /  ||  END
+        GRIS_BOUTON, GRIS_BOUTON, GRIS_BOUTON, BRUN_ORANGE,     #  4  |  5  |  6  |  *  ||   C
+        GRIS_BOUTON, GRIS_BOUTON, GRIS_BOUTON, BRUN_ORANGE,     #  1  |  2  |  3  |  -  ||   CE  || Unit_spinner
+        BLEU_BOUTON, GRIS_BOUTON, BLEU_BOUTON, BRUN_ORANGE      # +/- |  0  |  .  |  +  ||   =
     ]
 
     def __init__(self, current_value, current_unit, update_value_callback, case_desgn="", **kwargs):
@@ -155,7 +156,6 @@ class CalculatorPopup(Popup):
         self.calc_input = MyLabel(text="", size_hint_x=valeur_hint, bold=True, color=(0.6, 0.6, 0.6, 1), halign="right", font_size=valeur_font)
         self.calc_input.bind(text=self.on_text_change)
         self.calc_spinner = Spinner(text=str(self.return_data[2]), values=[label for uid, label in self.unit_list], size_hint_x=unit_hint, background_normal="", background_color=self.BRUN_ORANGE, font_size=unit_font)
-        # OBSOLETTE: self.calc_spinner.bind(text=self.on_unit_spinner_changed)
         self.calc_spinner.bind(text=self.on_text_change)
         self.spinner_placeholder = Widget(size_hint_x=unit_hint)    # 🎯 AJOUT : On crée un widget invisible de remplacement qui a exactement la même taille (unit_hint)
         self.droite_l4.add_widget(clac_label); self.droite_l4.add_widget(self.calc_input); self.droite_l4.add_widget(self.calc_spinner)
@@ -615,6 +615,7 @@ class CalculatorPopup(Popup):
 class SegmentPopupContent(BoxLayout):
     """
     PopUp pour confugurer des valeurs d'axes selon une calculation par déduction (angle, distance, ...)
+        utilisée par "l" et "alpha" dans CAO
     """
     def __init__(self, data, key_changed, on_confirm, key_target, **kwargs):
         super().__init__(orientation='vertical', spacing=10, padding=10, **kwargs)
@@ -1033,7 +1034,8 @@ class PartManagerPopup(Popup):
         # Groupe : Fichier
         #layout.add_widget(Label(text="[b]Fichier[/b]", markup=True))
         layout.add_widget(GroupHeader(Tr("file")))
-        layout.add_widget(Button(text=Tr("save"), on_release=lambda *a: self.manager.save()))
+        #layout.add_widget(Button(text=Tr("save"), on_release=lambda *a: self.manager.save()))
+        layout.add_widget(Button(text=Tr("save"), on_release=self.save_part))
         layout.add_widget(Button(text=Tr("reload"), on_release=self.reload_part))
         self.copy_from_btn = Button(text=Tr("copy_from_another_part"))
         if self.manager.entries and len(self.manager.entries) > 1:
@@ -1117,6 +1119,10 @@ class PartManagerPopup(Popup):
         self.update_buttons_state()
         self.dismiss()
 
+    def save_part(self,*args):
+        self.manager.save()
+        self.reload_part(*args)
+
     def open_copy_spinner(self, *args):
         dropdown = DropDown()
 
@@ -1153,3 +1159,113 @@ class PartManagerPopup(Popup):
         """Met à jour dynamiquement l'état des boutons en fonction du contenu de la pièce actuelle."""
         is_empty = not self.manager.entries or len(self.manager.entries) <= 1
         self.copy_from_btn.disabled = not is_empty
+
+
+# Dans screen_base/common_screen.py (ou votre module d'infrastructure UI)
+
+class ErrorInputPopup(Popup):
+    """
+    🚨 POP-UP D'ALERTE DE SAISIE INCORRECTE (Version 7.2) :
+    Boîte de dialogue modale réutilisable sur toutes les pages du DRO.
+    Embarque un disjoncteur temporel (Timer) pour s'effacer automatiquement.
+    """
+    def __init__(self, txt_error: str, case_dest: str = None, timer_off: float = 3.5, **kwargs):
+        """
+        Args:
+            txt_error (str): La chaîne brute saisie par l'opérateur (ex: '0.000a' ou '').
+            case_dest (str, optional): Désignation explicite de la cellule cible (ex: 'Nom de l'outil'). 
+                                       Si None, le message s'adapte de façon générique.
+            timer_off (float): Temps limite en secondes avant fermeture automatique.
+        """
+        kwargs.setdefault('title', "⚠️ ALERTE : SAISIE REFUSÉE")
+        kwargs.setdefault('size_hint', (None, None))
+        kwargs.setdefault('size', ("420dp", "210dp"))
+        kwargs.setdefault('auto_dismiss', True)
+        super().__init__(**kwargs)
+
+        self.timer_event = None
+        layout_principal = BoxLayout(orientation='vertical', padding="12dp", spacing="10dp")
+
+        # 🟢 VERIFICATION DU CHAMP VIDE (Votre Traitement Spécial !)
+        is_empty = not str(txt_error).strip()
+
+        # 🏗️ CONSTRUCTION DYNAMIQUE DU TEXTE UNIVERSEL (Avec le mot 'valeur')
+        if is_empty:
+            if case_dest:
+                message_texte = (
+                    f"Le champ [color=66ccff][b]{case_dest}[/b][/color] ne peut pas rester vide.\n"
+                    f"La modification est annulée, l'ancienne valeur est conservée."
+                )
+            else:
+                message_texte = (
+                    f"La saisie est restée vide.\n"
+                    f"La mémoire de la machine conserve sa configuration d'origine."
+                )
+        else:
+            # Cas d'un texte parasite (ex: '0.000a')
+            if case_dest:
+                message_texte = (
+                    f"La valeur [color=ff6666][b]{txt_error}[/b][/color] est incorrecte.\n"
+                    f"Le champ [color=66ccff][b]{case_dest}[/b][/color] conserve sa valeur d'origine."
+                )
+            else:
+                message_texte = (
+                    f"La valeur saisie [color=ff6666][b]{txt_error}[/b][/color] n'est pas valide.\n"
+                    f"La mémoire vive (RAM) de la machine reste protégée."
+                )
+
+        # Ajout du grand Label texturé avec Markup
+        lbl_message = Label(
+            text=message_texte,
+            markup=True,
+            halign='center',
+            valign='middle',
+            font_size="13sp"
+        )
+        lbl_message.bind(size=lambda inst, sz: setattr(inst, 'text_size', sz))
+        layout_principal.add_widget(lbl_message)
+
+        # Petit bandeau d'infos pour le Timer
+        if timer_off and timer_off > 0:
+            self.lbl_timer = Label(
+                text=f"Fermeture automatique dans {timer_off:.1f}s...",
+                font_size="10sp",
+                color=[0.5, 0.5, 0.5, 1],
+                size_hint_y=None,
+                height="15dp"
+            )
+            layout_principal.add_widget(self.lbl_timer)
+            self.timer_restant = timer_off
+            self.timer_event = Clock.schedule_interval(self._tick_timer, 0.1)
+
+        # Bouton manuel d'acquittement d'erreur pour l'opérateur
+        btn_ok = Button(
+            text="Acquitter l'erreur",
+            size_hint_y=None,
+            height="40dp",
+            background_normal="",
+            background_color=[0.7, 0.2, 0.2, 1],
+            bold=True,
+            font_size="13sp"
+        )
+        btn_ok.bind(on_release=self.dismiss)
+        layout_principal.add_widget(btn_ok)
+
+        self.content = layout_principal
+
+    def _tick_timer(self, dt):
+        self.timer_restant -= dt
+        if self.timer_restant <= 0:
+            self.dismiss()
+        else:
+            if hasattr(self, 'lbl_timer'):
+                self.lbl_timer.text = f"Fermeture automatique dans {self.timer_restant:.1f}s..."
+
+    def on_dismiss(self):
+        if self.timer_event:
+            Clock.unschedule(self.timer_event)
+            self.timer_event = None
+        super().on_dismiss()
+
+
+

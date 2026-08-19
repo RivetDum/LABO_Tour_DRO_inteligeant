@@ -1,0 +1,116 @@
+<CaoGraph>:
+    orientation: 'vertical'
+    padding: 0
+    spacing: 0
+    size_hint: (1, 1)
+
+    FloatLayout:
+        id: zone_globale          
+        size_hint: (1, 1)
+
+        # 🛡️ SOUS-COUCHE A : Le StencilView occupe 100% de la surface pour laisser passer les traits
+        StencilView:
+            id: zone_decoupe
+            size_hint: (1, 1)
+            pos: self.parent.pos
+
+        # 🧱 SUR-COUCHE B : Le tuteur d'interface (Superposé par-dessus)
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: (1, 1)
+            pos: self.parent.pos
+
+            # 🖱️ CASE GAUCHE (80%) : Zone d'affichage utile pour l'auto-scale automatique
+            BoxLayout:
+                id: box_calcul_gauche
+                size_hint_x: 0.88
+                size_hint_y: 1
+
+            # 🎛️ CASE DROITE (20%) : Le Panneau Fumé opaque d'action CAO
+            BoxLayout:
+                id: box_interface_droite
+                size_hint_x: 0.20
+                size_hint_y: 1
+                orientation: 'vertical'
+                padding: 15
+                spacing: 15
+                canvas.before:
+                    Color:
+                        rgba: 0.05, 0.05, 0.1, 0.75
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+
+                # --- BLOC NOM PIÈCE CAO ---
+                BoxLayout:
+                    orientation: 'horizontal'
+                    size_hint_y: None
+                    height: dp(12)
+                    spacing: dp(10)
+
+                    Label:
+                        text: "Pièce CAO:"
+                        bold: False
+                        font_size: '12sp'
+                        size_hint_x: None
+                        width: self.texture_size[0]
+                        valign: 'middle'
+                        text_size: None, self.height
+
+                    Widget:
+                        size_hint_x: 1
+                        canvas:
+                            Color:
+                                rgba: utils.get_color_from_hex(th_drl["profil_cao"]) if 'th_drl' in globals() else [0,1,0,1]
+                            Line:
+                                points: [self.x, self.y + self.height/2, self.right, self.y + self.height/2]
+                                width: th_drl["profil_cao_w"] if 'th_drl' in globals() else 2       
+
+                Label:
+                    id: cao_name_lbl
+                    text: app.part.get_part_name() if (hasattr(app, 'part') and app.part) else "SANS NOM"
+                    bold: True
+                    font_size: '14sp'       
+                    halign: 'right'
+                    valign: 'top'
+                    size_hint_y: None
+                    height: dp(20)          
+                    text_size: self.size 
+
+                # --- BLOC PIÈCE Sauvegardée ---
+                BoxLayout:
+                    orientation: 'horizontal'
+                    size_hint_y: None
+                    height: dp(12)
+                    spacing: dp(10)
+
+                    Label:
+                        text: "Sauvegarde:"
+                        bold: False
+                        font_size: '12sp'
+                        size_hint_x: None
+                        width: self.texture_size[0]
+                        valign: 'middle'
+                        text_size: None, self.height
+
+                    Widget:
+                        size_hint_x: 1
+                        canvas:
+                            Color:
+                                rgba: utils.get_color_from_hex(th_drl["profil_save"]) if 'th_drl' in globals() else [0,1,0,1]
+                            Line:
+                                points: [self.x, self.y + self.height/2, self.right, self.y + self.height/2]
+                                width: th_drl["profil_save_w"] if 'th_drl' in globals() else 2            
+ 
+
+                # 🎯 LE RESSORT D'ATELIER (Widget élastique pour plaquer les commandes en bas)
+                Widget:
+                    size_hint_y: 1
+
+                # --- PANNEAU DE COMMANDES LIÉES AU DESSIN ---
+                Button:
+                    text: "Zoom centre"
+                    halign: 'center'
+                    size_hint_y: None
+                    height: dp(40)          
+                    on_press: root.zoom_all_in_piece()

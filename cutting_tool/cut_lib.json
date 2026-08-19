@@ -1,0 +1,172 @@
+{
+    "cutt_tool": {
+        "1": {
+            "ident": "1",
+            "ident_insert": "1",
+            "tool_mount": 3,
+            "name": "Outil n° 1",
+            "homming": [true,true,true],
+            "mount_angle": 90000,
+            "offset_hor": [12000, 9999, 250],
+            "offset_vert": [15000, 999, 30],
+            "body": {
+                "clearance": [
+                    0,
+                    0
+                ],
+                "lead_angle": 500,
+                "lead_reverse": false,
+                "cadran": 1,
+                "points": [
+                    [[0, 0], 0],
+                    [[16000, 0], 0],
+                    [[16000, 100000], 0],
+                    [[0, 100000], 0]
+                ]
+            }
+        },
+        "2": {
+            "ident": "2",
+            "ident_insert": "2",
+            "tool_mount": null,
+            "name": "Outil n° 2",
+            "homming": [
+                false,
+                false,
+                false
+            ],
+            "mount_angle": 0,
+            "offset_hor": [12000, 0, 0],
+            "offset_vert": [800, 0, 0],
+            "body": {
+                "clearance": [
+                    0,
+                    0
+                ],
+                "lead_angle": 3500,
+                "lead_reverse": false,
+                "cadran": 4,
+                "points": [
+                    [[0, 0], 0],
+                    [[16000, 0], 0],
+                    [[16000, 100000], 0],
+                    [[0, 100000], 0]
+                ]
+            }
+        },
+        "3": {
+            "ident": "3",
+            "ident_insert": "2",
+            "tool_mount": 18,
+            "name": "Outil n° 2",
+            "homming": [true, true, true],
+            "mount_angle": 0,
+            "offset_hor": [12000, 0, 0],
+            "offset_vert": [800, 0, 0],
+            "body": {
+                "clearance": [
+                    0,
+                    0
+                ],
+                "lead_angle": 3500,
+                "lead_reverse": false,
+                "cadran": 4,
+                "points": [
+                    [[0, 0], 0],
+                    [[16000, 0], 0],
+                    [[16000, 100000], 0],
+                    [[0, 100000], 0]
+                ]
+            }
+        },
+        "4": {
+            "ident": "4",
+            "ident_insert": "2",
+            "tool_mount": 1,
+            "name": "Outil n° 4",
+            "homming": [true,true,true],
+            "mount_angle": 45000,
+            "offset_hor": [0, 0, 0],
+            "offset_vert": [0, 0, 0],
+            "body": {
+                "clearance": [
+                    0,
+                    0
+                ],
+                "lead_angle": 500,
+                "lead_reverse": false,
+                "cadran": 3.5,
+                "points": [
+                    [[0, 0], 0],
+                    [[16000, 0], 0],
+                    [[16000, 100000], 0],
+                    [[0, 100000], 0]
+                ]
+            }
+        },
+        "199": {
+            "ident": "199",
+            "ident_insert": "0",
+            "tool_mount": 0,
+            "name": "COMPARATEUR_MAITRE",
+            "homming": [
+                true,
+                true,
+                true
+            ],
+            "mount_angle": 0,
+            "offset_hor": [12000,0,0],
+            "offset_vert": [4000,0,0],
+            "body": {
+                "clearance": [
+                    0,
+                    0
+                ],
+                "lead_angle": 0,
+                "lead_reverse": false,
+                "cadran": 5.0,
+                "points": []
+            }
+        }
+    },
+    "FUTUR_cutt_tool":{
+        "1":{
+            "ident": "1",
+            "ident_insert": "1",
+            "ident_mount": "3",
+            "name": "Outil n° 1",
+            "cadran_icone": 1,
+            "INFO_cadran": "C'est des demi-cadrans surtout utile pour adapter l'icone correspondant à l'outil",
+            "idx_last_pos_porte_outil": 0, "NOTE":"Ceci plus facilement dans la sauvegarde dernière cession ?",
+            "crant_idexage": [[0, true],[3, false]],
+            "cadran_dro":[[0,0,true],[0,3,false]],
+            "offset_probbe":[[12000, 15000, true],[12000, 15000, false]],
+            "offset_machine":[[0, 0, true],[0, 0, true]],
+            "offset_correction":[[0, 0, true],[0, 0, false]],
+            "INFO: crant": ["pour chaque outil, on prévois une position par déf et une volante sur le multifixe par exemple",
+                    "Pour chaque offset : [ correction X, correction Y, offset validé]",
+                    "Pour le crant sur le multifix, regarder les crants-angles dans user_setting. et le bool aussi une validation !",
+                    "cadran_dro: C'est visuelement, ou l'opérateur veux son point 0, par rapport au bec de coupe (son rayon):",
+                        "1er: 1 à gauche, 0 au centre, 2 à droite",
+                        "2èm: 1 en haut, 0 au centre, 2 en bas(extérieur). Le bool, toujours pour valider l'état.",
+                        "(Ce décalage du rayon de bec n'est que visuel, pour le pogiciel, le point 0 reste le centre (0,0) du bec pour rester multi-directionnel !)"
+                    ],
+            
+            "body": {
+                "clearance": [0, 0,
+                    "INFO: Ceci et le décalage du dessin du burin par rapport au 0,0 de la plaquette, le rayon de coupe de la plaquette sera toujours centré sur le 0,0"
+                ],
+                "lead_angle": 500,
+                "INFO_lead": "C'est l'angle de rotation de l'insert par rapport à ça première arrête. lead_reverse: C'est pour miroité sur cette arrête par ex pour les burin intérieurs",
+                "lead_reverse": false,
+                "mount_angle": 90000, "INFO mount_a": "C'est l'angle de rotation de l'outil sur le crant idx 0, par rapport à son dessin",
+                "points": [
+                    [[0, 0], 0],
+                    [[16000, 0], 0],
+                    [[16000, 100000], 0],
+                    [[0, 100000], 0]
+                ]
+            }
+        }
+    }
+}

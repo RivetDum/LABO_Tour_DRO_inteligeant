@@ -1,0 +1,68 @@
+V_7.3.0:
+    >> A FAIRE:
+    - contrôler/réparer les idx / ident de point [entry] dans l'éditeur CAO:
+        - je suppose qu'il y a un mélange entre les deux ! surtout lors de l'enregistrement.
+        - décider si lors du chargement de la pièce je met index 0 = ident 1 ou j'armonise idx0 = ident0 ?
+        - j'ai besoin de cette ident pour suivre les ajouts/suppressions !
+    - Supprimer l'utilisation dans "part/draw_pnt_manager.py" de la class ColumnDefaultSpec() et remplacer par l'utilisation 
+      de part/draw_pnt_manager.py: Ram_aix_config (Copy.deep éditable de configurator/config.py: AXIS_CONFIG)
+    
+    >> FAIT:
+    - Dans PointManager() load()
+            self.next_id_point = 0  
+            def new_id_pnt():
+                self.next_id_point += 1
+                return self.next_id_point - 1   # (next_id_point + 1 - 1 = next_id_point avant changement)
+            ...
+            for raw in part.get("points", []):
+                id_pnt = new_id_pnt()
+        # Donc l'ident du point correspond à l'idx du point d'origine. Les point ajouté aurons un ident > que les index d'origine disponibles !
+
+        # je vais résumer comment son gérer les points
+            draw_pont.json: Le fichier de sauvegarde
+            |
+            ├─JsonPartStorage():
+               self.part_json_loaded  # Copie complète de la pièce (données JSON) lors du dernier chargement. Correspond à : {"name": "Pièce A","points": [{...},{...}]}
+                |
+                ├─PointManager:
+                | ├─>les points et shapes passent au niveau segments brut et net: self.saved_profile_brut; self.saved_profile_seg_net; self.curent_profile_seg_net
+                | └─self.entries: list[PointEntry] = [] ici la liste et divisé en point individuel  
+                |   ├─PointEntry:
+                |   | ├─>self.raw_shape_segments = []  # Liste des dict bruts {"type": "m"/"r"/"a"..."id_pnt": self.id_pnt} généré par le shape
+                |   | ├─self.raw # ==> Clône d'un point json modifiable
+                |   | └ | ─self.data ->obj:PointData # ==> Mise au format et valeurs dérivée pour l'affichage d'édition
+                |   |   |   |       └─
+           {|} [|] [|]  |   |   => {} = toutes les pièces / [] = tous les points de la piècce
+
+V_7.3.1
+    >> A FAIRE:
+    - Remplacer le mirror (mirror Z) par un retournement complet de la pièce (mode CAO et FAO), Exactement comme quand on tourne la pièce dans la broche du tour !
+    - Adapter le draw_point.json pour la nouvelle version de points avec les barrières et le point ratio.
+        # OLD_variente:
+        {
+            "name": "Pièce B",
+            "points": [
+                {"pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [0,4000],"shape": ["standard","Chanfrein"],"shape_label": "","shape_params": {"largeur_a": [2000,false],"symetry": [0,false]}},
+                {"pos": [-35000,4000],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.4)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 400,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "axis","ref_appuis": "B-A"}},
+                {"pos": [-35000,8000],"shape": null,"shape_label": null,"shape_params": {}},
+                ...]    }
+        # NEW_variente:
+        {
+            "name": "Pièce B",
+            "barrière": [définition barrière IN, définition barrière OUT]
+            "points": [
+                {"type": "pnt", "pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}},
+                {"type": "pnt", "pos": [0,4000],"shape": ["standard","Chanfrein"],"shape_label": "","shape_params": {"largeur_a": [2000,false],"symetry": [0,false]}},
+                {"type": "pnt", "pos": [-35000,4000],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.4)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 400,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "axis","ref_appuis": "B-A"}},
+                {"type": "pnt", "pos": [-35000,8000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"type": "rat", "ratio": 0.5, "shape": null,"shape_label": null,"shape_params": {}},
+                {"type": "bar", "shape compris": true, "direction": IN},
+                {"type": "pnt", "pos": [-38000,8000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"type": "pnt", "pos": [-38000,6000],"shape": null,"shape_label": null,"shape_params": {}},
+                {"type": "bar", "shape compris": false, },
+                ...]    }
+
+    - adapter le reste à cette nouvelle config.
+
+    >> FAIT:

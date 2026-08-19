@@ -1,0 +1,58 @@
+# Query: theme_manager
+# Flags: RegExp
+# ContextLines: 1
+
+11 results - 9 files
+
+Recherche Global "theme_manager" ... lieux ou un remplacement par la variable du main() devrait s'oppérer
+
+common_draw.py:
+  10  import math
+  11: from ui_configurator.theme_manager import draw_line as th_drl   # th_drl => Thème draw line
+  12  
+
+dro_viewer.kv:
+  2  #:import utils kivy.utils
+  3: #:import th_drl ui_configurator.theme_manager.draw_line
+  4  
+
+main.py:
+   39  # 🟢 On importe votre dictionnaire Hexa et votre fonction de normalisation d'atelier !
+   40: from ui_configurator.theme_manager import draw_line
+   41  from common_draw import normalize_color # Ajustez le chemin d'import selon votre arborescence
+
+  161          # 7️⃣ 🟢 ÉCRAN : PRÉFÉRENCES OPÉRATEUR / SETTINGS (Nouveau !)
+  162:         from ui_configurator.theme_manager import SettingsPageManager
+  163          screen_setting = Screen(name="screen_SETTING")
+
+part\draw_pnt_manager.py:
+  11  from configurator.config import get_unit_config, get_unit_property, format_unit, get_unit_id, get_all_units_for_type, get_unit_type, AXIS_CONFIG, parse_user_input, USER_PREFERENCES, save_json, USER_LAST_SELECT
+  12: from ui_configurator.theme_manager import draw_line as th_drl   # th_drl => Thème draw line
+  13  import common_draw as cdraw
+
+part\shapes\chamfer.py:
+  6          bissectrice_normalised, create_entities_from_raw, re_paint_entities, compute_angle_rad, dot_scalaire_vector)
+  7: from ui_configurator.theme_manager import draw_line as th_drl
+  8  from kivy.uix.boxlayout import BoxLayout
+
+part\shapes\round_corner.py:
+  16  #from ui_configurator.theme_ui import UiTheme
+  17: from ui_configurator.theme_manager import draw_line as th_drl
+  18  
+
+part\shapes\thread_relief_iso.py:
+  38  import common_draw as cd
+  39: from ui_configurator.theme_manager import draw_line as th_drl
+  40  
+
+ui_configurator\theme_manager.kv:
+  1: # ui_configurator \ theme_manager.kv
+  2  
+
+ui_configurator\theme_manager.py:
+   1: # ui_configurator \ theme_manager.py
+   2  
+
+  87  
+  88: Builder.load_file(os.path.join(os.path.dirname(__file__), "theme_manager.kv"))
+  89  

@@ -1,0 +1,1 @@
+# cutting_tool/cutting_widgets/ - popup_jauge.py      # Popup pour faire le zéro ou calibrer avec le palpeur (probe)

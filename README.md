@@ -50,9 +50,11 @@ Ce projet est une application Kivy permettant la création de dessins techniques
     ├─── utils.py           # utilitaires globaux (structure, format, log.txt, etc...)
     ├── ui_configurator/    # Dossier thèmes et autre configurations de l'écran
     │   └── ...                 # ...
-    ├──v config.py          # Paramètres globaux et constantes (structure, accès facile)
-    ├──^ user_settings.json  # Paramètres persistants utilisateur (unité, thème, etc.)
     |
+    ├── config/
+    │ ├─v config.py          # Paramètres globaux et constantes (structure, accès facile)
+    | ├─^ user_settings.json  # Paramètres persistants utilisateur (unité, thème, etc.)
+    | └── dro_machine.py      # 🏗️ machine / homing /outils / ofsset / état
     │
     ├── main.py             # Point d’entrée de l’application
     ├── common_widgets.py   # Composants UI réutilisables (MyLabel, Separator, etc.)
@@ -81,6 +83,28 @@ Ce projet est une application Kivy permettant la création de dessins techniques
     │   ├── thread_relief_iso.py    ← classe `gorge de filatge ISO`
     │ //  └── plugin_loader.py        ← plus tard, pour charger des plugins externes
     │
+    │       #NEW format dossier TOOLs (outils de coupe)
+    ├── cutting_tool/              # Modules fonctionnels liés au burin et à la tourelle
+    │   ├── cut_tool_data.py       # Vue : Formulaire principal d'IHM pour ce qui est outil de coupe
+    │   ├─v cut_manager.py         # Contrôleur + Modèle : Gère la liste, les calculs et le JSON
+    │   ├─^ cut_lib.json           # Vos Burins (correcteurs ESP32, liens vers plaquettes)
+    │   ├─v cut_insert_manager.py  # L'usine géométrique : Calcule les points et le rayon de bec (400µm)
+    │   ├─^ cut_insert_lib.json    # Catalogue de vos plaquettes immuables
+    │   ├── cut_norme.py           # 🚀 LE FOURRE-TOUT NORMATIF : Angles, cercles inscrits, codes ISO
+    │   ├── __init__.py            # Initialise le package cutting_tool
+    │   │
+    │   └── cutting_widgets/        # Outils annexes (Fenêtres modales, lignes de tableaux, fonction communes)
+    │       ├── common_cut_tool.py     # Outils et widgets communs aux dossier cutting_tool/ 
+    │       ├──!── popup_widget.kv  # Ici un seul fichier .kv pour tous le sous-dossier [cutting_widgets]
+    │       ├── popup_jauge.py      # Popup pour faire le zéro ou calibrer avec le palpeur (probe)
+    │       ├── popup_porte_outil.py # Popup pour affecter un burin sur un tool_mount (1, 2, 3...)
+    │       └── __init__.py         # Initialise le package tool_widgets
+    │
+
+    │   ├── common_cut_tool.py     # Outils communs aux dossier cutting_tool/ (par ex: outils de calcules, d'affichage, ...)
+    
+    │
+    OLD_TOOL
     ├── cutting_tool/       # Modules fonctionnels liés au dessin du burin
     │   ├─v TurnCut.py              # Editeur d'outils de coupe
     │   ├─v Insert.py               // classe de la plaquette
@@ -97,11 +121,11 @@ Ce projet est une application Kivy permettant la création de dessins techniques
     │
     ├── dro_tool/
     │   ├── dro_axis.py         # ⚙️ popups / outils liés aux axes
-    │   ├── dro_cutter.py       # 🏗️ outils / ofsset / état
-    │   ├── dro_machine.py      # 🏗️ machine / homing / état
-    │   ├── dro_user.py         # 👤 profil utilisateur, préférences
-    │   ├── dro_comm.py         # 🔌 communication MCU / port série ==> ?? A remplacer par reel_time/machine_mcu.py ??
-    │   └── dro_drawing.py      # 🧭 affichage, points, graph, etc.
+    │   #Supprimé├── dro_cutter.py       # 🏗️ outils / ofsset / état
+    │   #Déplacer dans config/├── dro_machine.py      # 🏗️ machine / homing /outils / ofsset / état
+    │   #Supprimé├── dro_user.py         # 👤 profil utilisateur, préférences
+    │   #Supprimé├── dro_comm.py         # 🔌 communication MCU / port série ==> ?? A remplacer par reel_time/machine_mcu.py ??
+    │   #Supprimé└── dro_drawing.py      # 🧭 affichage, points, graph, etc.
     │
     │
     ├── machine_tool/

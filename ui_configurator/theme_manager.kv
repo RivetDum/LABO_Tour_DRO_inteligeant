@@ -1,0 +1,36 @@
+# ui_configurator \ theme_manager.kv
+
+#:import dp kivy.metrics.dp
+
+
+
+<SettingsPageHeader>:
+    orientation: "horizontal"
+    size_hint_y: 1.0
+    padding: ["15dp", "4dp", "8dp", "4dp"]
+    canvas.before:
+        Color:
+            rgba: 0.15, 0.15, 0.18, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    Label:
+        text: "⚙️ CONFIGURATION ET PRÉFÉRENCES DE L'INTERFACE"
+        bold: True
+        font_size: "14sp"
+        halign: "left"
+        text_size: self.size
+        valign: "middle"
+
+<SettingsPageDashboard>:
+    canvas.before:
+        Color:
+            rgba: 0.08, 0.08, 0.1, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    Label:
+        text: "🚧 Formulaire des thèmes, langues et unités en cours de construction..."
+        font_size: "15sp"
+        color: [0.9, 0.5, 0.0, 1] # Écrit en orange d'atelier
+        halign: "center"

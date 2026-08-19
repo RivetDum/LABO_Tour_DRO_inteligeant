@@ -128,8 +128,9 @@ ui_kivy_theme = {
         "lib" : "from kivy.uix.image import Image",
         "args" : {
             "source": "path/to/image.png",  # Source de l'image
-            "allow_stretch": True,  # Permet d'étirer l'image
-            "keep_aspect": True,  # Préserve le ratio de l'image
+            #"allow_stretch": True,  # Permet d'étirer l'image
+            #"keep_aspect": True,  # Préserve le ratio de l'image
+            "fit_mode":"contain",  # Remplace "allow_stretch": True ET "keep_aspect": True
             "size_hint": [None, None]  # Taille de l'image par rapport à son parent
         }
     },

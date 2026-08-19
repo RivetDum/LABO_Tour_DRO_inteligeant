@@ -1,5 +1,8 @@
 # common_widgets.py
 
+import os
+from kivy.app import App
+from kivy.lang import Builder
 from kivy.uix.widget import Widget
 from copy import copy
 from kivy.uix.boxlayout import BoxLayout
@@ -7,7 +10,7 @@ from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.togglebutton import ToggleButtonBehavior
-from kivy.properties import ObjectProperty
+from kivy.properties import BooleanProperty, StringProperty
 #from kivy.uix.spinner import Spinner, SpinnerOption, SpinnerDropdown
 from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.dropdown import DropDown
@@ -29,6 +32,10 @@ BTN_NEUTRE   = 0   # Bouton standard d'usine (Gris/Vert sombre)
 BTN_ACTIF    = 1   # Onglet actuellement sélectionné / enfoncé (Vert flashy)
 BTN_INACTIF  = 2   # Fonction non disponible ou bridée (Gris/Vert très sombre)
 BTN_ALARME   = 3   # Alerte machine ou attention requise (Orange/Rouge saumon)
+SW_GRIS_ON   = 4    # pout toogle_boton enfoncé Gris
+SW_GRIS_OFF  = 5    # pout toogle_boton relâché Gris plus claire
+
+Builder.load_file(os.path.join(os.path.dirname(__file__), "common_widgets.kv"))
 
 
 class MyLabel(Label):
@@ -231,7 +238,7 @@ class ClickableLabel(ButtonBehavior, LabeledCell):
     __events__ = ('on_click',)  # ✅ déclare un événement Kivy utilisable dans KV
 
     def __init__(self, **kwargs):
-        self.bg_color = kwargs.pop('bg_color', (0, 0, 1, 1))
+        self.bg_color = kwargs.pop('bg_color', (0, 0, 1, 0))
         self.hover_color = kwargs.pop('hover_color', (0, 0, 0, 0.2))
         super().__init__(**kwargs)
         Window.bind(mouse_pos=self._on_mouse_pos)
@@ -344,54 +351,6 @@ class HoverLabel(Label):
         self.bg_rect.size = self.size
         self.bg_rect.pos = self.pos
 
-class OLD_InputCell(TextInput):
-    STATUS_COLORS = {
-        STATUS_NEUTRE:  (1, 1, 1, 0.85),        # blanc doux
-        STATUS_INACTIF: (0.75, 0.75, 0.75, 1),  # gris clair
-        STATUS_ERREUR:  (1, 0.5, 0.5, 1),       # rouge clair
-        STATUS_VALIDE:  (0.6, 1, 0.6, 1),       # vert clair
-    }
-
-    def __init__(self, text, status=STATUS_NEUTRE, size_hint_x = None, width=180, halign = 'right', **kwargs):
-        super().__init__(**kwargs)
-        self.text = text
-        self.status = status
-        self.def_back_color = self.STATUS_COLORS[STATUS_NEUTRE]
-        if size_hint_x is not None:    # Gère intelligemment size_hint_x et width
-            self.size_hint_x = size_hint_x
-        else:
-            self.size_hint_x = None
-            if width is not None:
-                self.width = width  # Pas de width = None ici !
-        self.padding = (10, 1)
-        #self.padding_y = [5, 5]
-        self.multiline = False
-        self.write_tab = False
-        self.halign = halign
-        self.valign = 'middle'
-        self.text_size = (self.width, None)
-        self.foreground_color = (0, 0, 0, 1)
-
-        self.set_status(status)
-        self.bind(focus=self.on_focus)
-        self.bind(height=self._update_padding)
-
-    def _update_padding(self, *args):
-        font_height = self.line_height  # Hauteur d'une ligne de texte
-        vertical_padding = max((self.height - font_height) / 2, 0)
-        self.padding = [10, vertical_padding]
-
-    def set_status(self, status=None):
-        self.status = STATUS_NEUTRE if status is None else status
-        color = self.def_back_color if status is None else self.STATUS_COLORS.get(self.status, (1, 1, 1, 1))
-        self.background_color = color
-
-    def get_status(self):
-        return self.status
-
-    def on_focus(self, instance, value):
-        if value:
-            Clock.schedule_once(lambda dt: instance.select_all(), 0.2)
 class InputCell(TextInput):
     # Déclaration de vos constantes de statut en haut de fichier (rappel)
     # STATUS_NEUTRE = 0, STATUS_INACTIF = 1, etc.
@@ -497,14 +456,14 @@ class InputCellLabel(InputCell):
             return super().on_touch_down(touch)
         return False
 
-
-
 class MenuButton(ToggleButtonBehavior, Label):
     STATUS_COLORS = {
         BTN_NEUTRE:   (0.2, 0.35, 0.2, 1),    # Vert d'ambiance d'origine
         BTN_ACTIF:    (0.3, 0.6, 0.3, 1),     # Vert plus flashy (sélectionné / enfoncé)
         BTN_INACTIF:  (0.12, 0.15, 0.12, 1),  # Gris éteint et bloqué
         BTN_ALARME:   (1, 0.5, 0.3, 1),       # Orange/Rouge d'alerte
+        SW_GRIS_OFF:   (0.32, 0.28, 0.35, 1),    # "#9EA69E"
+        SW_GRIS_ON:  (0.62, 0.65, 0.62, 1)     # "#6B736B"
     }
 
     # 🎯 TRICHE UNIFIÉE : On ajoute is_toggle=False par défaut
@@ -516,7 +475,6 @@ class MenuButton(ToggleButtonBehavior, Label):
         self.halign = "center"
         self.valign = "middle"
         self.is_toggle = is_toggle  # Sauvegarde de ta manette de contrôle
-
         # Création du fond RoundedRectangle opaque
         with self.canvas.before:
             self.canvas_bg_color = Color(0, 0, 0, 1)
@@ -539,16 +497,23 @@ class MenuButton(ToggleButtonBehavior, Label):
         """Bascule la couleur du fond dès que Kivy change l'état du Toggle."""
         self.set_status(self.status)
 
-    def set_status(self, status=BTN_NEUTRE):
+    def set_status(self, status='normal'):
         """Applique la couleur selon le statut ou l'enfoncement."""
         self.status = status
         self.disabled = True if self.status == BTN_INACTIF else False
 
         # Si le bouton est enfoncé (down), il prend la couleur active
-        if self.state == 'down':
-            color = self.STATUS_COLORS[BTN_ACTIF]
+        if not self.is_toggle:
+            if self.state == 'down':
+                color = self.STATUS_COLORS[BTN_ACTIF]  # Devient vert flashy
+            else:
+                color = self.STATUS_COLORS.get(self.status, self.STATUS_COLORS[BTN_NEUTRE])
         else:
-            color = self.STATUS_COLORS.get(self.status, self.STATUS_COLORS[BTN_NEUTRE])
+            if self.state == 'down':
+                color = self.STATUS_COLORS[SW_GRIS_ON]  # Devient vert flashy
+            else:
+                toogle_status = 5 if self.status == 0 and self.state == 'normal' else self.status
+                color = self.STATUS_COLORS.get(toogle_status, self.STATUS_COLORS[SW_GRIS_OFF])
             
         self.canvas_bg_color.rgba = color
 
@@ -562,6 +527,203 @@ class MenuButton(ToggleButtonBehavior, Label):
             # On force le bouton à se relâcher immédiatement tout seul !
             self.state = "normal"
         return super().on_release()
+
+
+class BtnSwitchImageLed(ButtonBehavior, BoxLayout):
+    """
+    🎛️ HYBRID MENU BUTTON WITH LIGHT-FRAME (Version 7.2) :
+    Bouton-conteneur d'adresse. Reçoit des images/textes depuis le .kv.
+    Gère la triche de retour automatique à l'état normal.
+    """
+    target_screen = StringProperty("")  # Clé de la DictProperty (ex: 'screen_CUTTER')
+    is_toggle = BooleanProperty(False)  # True = Interrupteur fixe | False = Impulsion / Triche
+    is_switch = BooleanProperty(False)  # Détecte s'il s'agit du bouton tactile
+    # 🟢 SÉCURISÉ : On déclare le suffixe comme une vraie propriété Kivy avec une valeur de base solide !
+    suffixe_act = StringProperty("_ia")
+
+    def __init__(self, **kwargs):
+        # Configuration industrielle par défaut du conteneur vertical
+        kwargs.setdefault('orientation', 'vertical')
+        kwargs.setdefault('padding', '6dp')
+        kwargs.setdefault('spacing', '4dp')
+        kwargs.setdefault('size_hint_y', None)
+        kwargs.setdefault('height', '65dp')
+        super().__init__(**kwargs)
+
+    def _init_button_logic(self, instance, value):
+        """ Calcule si c'est un interrupteur et se branche sur l'écoute de l'App """
+        self.is_switch = "sw_" in self.target_screen
+        
+        app = App.get_running_app()
+        if app:
+            # Dès que l'écran actif change dans le main, on recalcule notre reflet !
+            app.bind(screen_actif=self._update_suffix)
+            self._update_suffix()
+
+    def _update_suffix(self, *args):
+        """ Moulinette Python synchrone qui garantit le "_a" ou le "_ia" en RAM """
+        app = App.get_running_app()
+        if app and app.screen_actif == self.target_screen:
+            self.suffixe_act = "_a"
+        else:
+            self.suffixe_act = "_ia" # Valeur de repli automatique, jamais None !
+
+
+    def on_release(self):
+        """ 🎯 LE SECRET DE LA TRICHE SÉCURISÉ """
+        # Si ce n'est pas un interrupteur permanent (comme sw_TACTILE)
+        if not self.is_toggle:
+            # On force le bouton à se relâcher immédiatement tout seul
+            self.state = "normal"
+        return super().on_release()
+
+class BottonImageLed(ButtonBehavior, BoxLayout):
+    """ 🖥️ BOUTON D'ONGLET DE NAVIGATION PURE (V_7.2) """
+    show_both = BooleanProperty(False)
+    target_screen = StringProperty("")  # Ex: 'screen_CUTTER'
+    suffixe_act = StringProperty("_ia")
+    display_mode = StringProperty("TEXT_ONLY")
+    # Référance utilisé Par le .kv (Réactif au changements)
+    source_image = StringProperty("")
+    status_led = StringProperty("ok")
+    text_bouton = StringProperty("- -")
+
+    def __init__(self, **kwargs):
+        show_both_val = kwargs.pop('show_both', False)
+        kwargs.setdefault('orientation', 'vertical')
+        kwargs.setdefault('padding', '6dp')
+        kwargs.setdefault('spacing', '4dp')
+        kwargs.setdefault('size_hint_x', 1.0)
+        kwargs.setdefault('size_hint_y', 1.0)
+        #kwargs.setdefault('height', '65dp')
+        super().__init__(**kwargs)
+
+        self.show_both = show_both_val
+        Clock.schedule_once(self._recalculer_mode_affichage, 0.05)  # Refrech après initiation complette
+
+        self.bind(target_screen=self._connect_to_app)
+
+    def _connect_to_app(self, instance, value):
+        app = App.get_running_app()
+        if app and self.target_screen:
+            app.bind(screen_actif=self._update_ui_state)
+            # Écoute réactive de la DictProperty plate du main
+            app.bind(**{self.target_screen: self._recalculer_mode_affichage})
+            self._update_ui_state()
+            self._recalculer_mode_affichage()
+
+    def _update_ui_state(self, *args):
+        app = App.get_running_app()
+        self.suffixe_act = "_a" if (app and app.screen_actif == self.target_screen) else "_ia"
+
+    def _recalculer_mode_affichage(self, *args):
+        """ 🎯 L'AUTOMATE CENTRALISÉ : Répartit les données dans vos passerelles """
+        app = App.get_running_app()
+        if not app or not self.target_screen:
+            self.display_mode = "TEXT_ONLY"
+            self.source_image = ""
+            self.status_led = "ok"
+            self.text_bouton = "-"
+            return
+            
+        screen_dict = getattr(app, self.target_screen, None)
+        if not screen_dict:
+            return
+
+        # 🟢 TRANSFERT DIRECT DANS VOS PASSERELLES LOCALES (Texte brut, ultra-sûr)
+        chemin_icon = screen_dict.get("icon")
+        self.source_image = str(chemin_icon) if chemin_icon else ""
+        self.status_led = str(screen_dict.get("status", "OK")).lower()
+        self.text_bouton = str(screen_dict.get("text", "Er."))
+        
+        # Validation de l'existence de l'icône
+        has_icon = self.source_image != ""
+
+        # Aiguillage des états géométriques X, Y, Z
+        if has_icon and self.show_both:
+            self.display_mode = "BOTH"
+        elif has_icon and not self.show_both:
+            self.display_mode = "ICON_ONLY"
+        else:
+            self.display_mode = "TEXT_ONLY"
+
+    def on_release(self):
+        # Relâchement automatique natif sans triche mécanique
+        self.state = "normal"
+        return super().on_release()
+
+
+class SwitchImageLed(ButtonBehavior, BoxLayout):
+    """ 🎛️ INTERRUPTEUR TACTILE AVEC PALIER DE PROPRIÉTÉS ISOLÉES (V_7.2 Master) """
+    show_both = BooleanProperty(False)
+    target_screen = StringProperty("")  
+    suffixe_act = StringProperty("_ia")
+    prefixe = StringProperty("")    #("sw_") Si status "OK"
+    display_mode = StringProperty("TEXT_ONLY")
+    
+    # 🟢 LES MÊMES PASSERELLES LOCALES POUR LE COMMUTATEUR
+    source_image = StringProperty("")
+    status_led = StringProperty("ok")
+    text_bouton = StringProperty("--")
+
+    def __init__(self, show_both:bool = False, **kwargs):
+        show_both_val = kwargs.pop('show_both', False)
+        kwargs.setdefault('orientation', 'vertical')
+        kwargs.setdefault('padding', '6dp')
+        kwargs.setdefault('spacing', '4dp')
+        kwargs.setdefault('size_hint_x', 1.0)
+        kwargs.setdefault('size_hint_y', 1.0)
+        super().__init__(**kwargs)
+
+        self.show_both = show_both_val
+        Clock.schedule_once(self._sync_with_machine, 0.05)  # Refrech après initiation complette
+        
+        app = App.get_running_app()
+        if app:
+            app.bind(mode_tactile_actif=self._sync_with_machine)
+            app.bind(sw_TACTILE=self._sync_with_machine)
+            self._sync_with_machine()
+
+
+
+    def _sync_with_machine(self, *args):
+        app = App.get_running_app()
+        if not app or not self.target_screen:
+            self.prefixe = ""
+            self.display_mode = "TEXT_ONLY"
+            self.source_image = ""
+            self.status_led = "ok"
+            self.text_bouton = "-"
+            return
+            
+        # Étage 1 : Activation
+        if app.mode_tactile_actif:
+            self.state = "down"
+            self.suffixe_act = "_a"
+        else:
+            self.state = "normal"
+            self.suffixe_act = "_ia"
+            
+        # Étage 2 : Données d'armoire
+        statut_brut = app.sw_TACTILE.get("status", "OK")
+        self.status_led = str(statut_brut).lower()
+        self.text_bouton = str(app.sw_TACTILE.get("text", "Er."))
+        
+        chemin_icon = app.sw_TACTILE.get("icon")
+        self.source_image = str(chemin_icon) if chemin_icon else ""
+        
+        # Étage 3 : Préfixe de santé
+        self.prefixe = "" if statut_brut != "OK" else "sw_"
+        
+        # Étage 4 : Automate géométrique
+        has_icon = self.source_image != ""
+        if has_icon and self.show_both:
+            self.display_mode = "BOTH"
+        elif has_icon and not self.show_both:
+            self.display_mode = "ICON_ONLY"
+        else:
+            self.display_mode = "TEXT_ONLY"
+
 
 class CustomSpinnerOption(SpinnerOption):
     def on_parent(self, instance, parent):

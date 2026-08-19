@@ -1,0 +1,52 @@
+{
+    "user_preferences": {"unit_distance": "mm","unit_angle": "deg","unit_speed": "rpm"},
+    "units": {
+        "mm": {"type": "unit_distance","factor": 1000.0,"decimals": 3,"label": "mm","long_name": "Millimètre"},
+        "inch": {"type": "unit_distance","factor": 25400.508026,"decimals": 5,"label": "in","long_name": "Pouce"},
+        "deg": {"type": "unit_angle","factor": 1000.0,"decimals": 2,"label": "°","long_name": "Degré"},
+        "rad": {"type": "unit_angle","factor": 57295.779513,"decimals": 4,"label": "rad","long_name": "Radian"},
+        "grade": {"type": "unit_angle","factor": 900.0,"decimals": 2,"label": "gon","long_name": "Grade (Gon)"},
+        "rpm": {"type": "unit_speed","factor": 16.666667,"decimals": 1,"label": "rpm","long_name": "Tours par minute"},
+        "rps": {"type": "unit_speed","factor": 1000.0,"decimals": 3,"label": "tr/s","long_name": "Tours par seconde"},
+        "rad/s": {"type": "unit_speed","factor": 159.15494309189535,"decimals": 4,"label": "rad/s","long_name": "Radian par seconde"}
+    },
+    "axis": {
+        "vert": {"screen": "X","factor": 2,"numerator": 5,"denominator": 1,"type": "unit_distance","unit": "unit_distance","info": "diamètre transversale, absolu","last_position_micron": -40},
+        "hor": {"screen": "Z","factor": 1,"numerator": 5,"denominator": 1,"type": "unit_distance","unit": "unit_distance","info": "profondeur trainard, absolu","last_position_micron": -210},
+        "sup": {"screen": "Y","factor": 1,"numerator": 5,"denominator": 1,"type": "unit_distance","unit": "unit_distance","angle": 45000,"unit_angle": "unit_angle","info": "chariot porte outil, absolu + angle","last_position_micron": 1980},
+        "s": {"screen": "s","factor": 1,"numerator": 360,"denominator": 32768,"type": "unit_angle","unit": "unit_angle","info": "position de la broche avec  TLE5012B (ou MT6835)"},
+        "r": {"screen": "r","factor": 1,"numerator": 5,"denominator": 1,"type": "unit_angle","unit": "unit_angle","info": "Servo sur vise mère: Inutilisé pour l'instant"},
+        "vert2": {"screen": "h","factor": 1,"numerator": 5,"denominator": 1,"type": "unit_distance","unit": "unit_distance","info": "X_relatif au rayon"},
+        "hor2": {"screen": "p","factor": 1,"numerator": 1,"denominator": 1,"type": "unit_distance","unit": "unit_distance","info": "Z_relatif"},
+        "l": {"screen": "l","factor": 1,"numerator": 1,"denominator": 1,"type": "unit_distance","unit": "unit_distance","info": "Longeur du segment (h1'p1 / h2'p2)"},
+        "alpha": {"screen": "α","factor": 1,"numerator": 1,"denominator": 1,"type": "unit_angle","unit": "unit_angle","info": "Pente du segment"},
+        "hor3": {"screen": "diam","factor": 2,"numerator": 1,"denominator": 1,"type": "unit_distance","unit": "unit_distance","info": "X + Y en X (diamètre absolu)"},
+        "vert3": {"screen": "long","factor": 1,"numerator": 1,"denominator": 1,"type": "unit_distance","unit": "unit_distance","info": "Z + Y en Z (profondeur absolu)"}
+    },
+    "shortcuts": {
+        "toggle_mirror": "Ctrl+M"
+    },
+    "user_config": {
+        "user_language": "fr",
+        "draw_profil_scale_dp": 0.005,
+        "theme_name": "dark",
+        "theme_path": "..."
+    },
+    "user_last_select":{
+        "fao_y_mode_selected": "fillet",
+        "fao_r_mode_selected": "",
+        "selected_part_idx": 4,
+        "selected_tool_ident": "199", 
+        "vc_ref_mat_idx": 0, "auto_vc": false,
+        "tactile_keyboard": true
+    },
+    "machine_config":{
+        "rotate_ref_cutter": false,
+        "cutters_not_homing_to_rotate": true,
+        "index_multi_fix": [0, 18, 36, 54, 72, 90, 108, 126, 144, 162, 180, -162, -144, -126, -108, -90, -72, -54, -36, -18],
+        "has_coolant_pump": false,
+        "spindle_captor_type": "TLE5012B",
+        "y_motor_type": "STEPPER",
+        "r_motor_type": "SERVO_INUTINISE"
+    }
+}

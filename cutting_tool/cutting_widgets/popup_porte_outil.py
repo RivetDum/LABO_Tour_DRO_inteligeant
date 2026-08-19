@@ -1,0 +1,1 @@
+# cutting_tool/cutting_widgets/ - popup_porte_outil.py # Popup pour affecter un burin sur un tool_mount (1, 2, 3...)

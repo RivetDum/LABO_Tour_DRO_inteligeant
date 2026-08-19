@@ -1,5 +1,7 @@
 #   draw_tool/   draw_data.py
 
+import os
+from kivy.clock import Clock
 from kivy.app import App
 from kivy.properties import ListProperty
 from kivy.metrics import dp
@@ -9,19 +11,26 @@ from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.splitter import Splitter
 from kivy.uix.button import Button
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.label import Label
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.popup import Popup
+from kivy.lang import Builder
 
 from common_widgets import LabeledCell, InputCell, MyLabel, Separator
+from screen_base.common_screen import BaseScreenLayout
 from i18n import tr, Tr, TR  # La fonction de traduction importée tr>> tel que la traduction; Tr première lettre en majuscule; TR tous en majuscule
-from config import get_unit_id, parse_user_input, AXIS_CONFIG
+from configurator.config import get_unit_id, parse_user_input, AXIS_CONFIG
 from part.draw_tool.popup_segment import SegmentPopupContent, PartManagerPopup, CalculatorPopup
 from part.draw_pnt_manager import PointValue, PointData, ColumnDefaultSpec
 from part.shapes.shape_editor import ShapeEditor    # part/shapes/shape_editor.py
+from common_draw import ProfilCanvas, DashedLineWidget
 
+
+# Ordre et identifiants uniques des colonnes (Clés d'axes ou de fonctions)
+COL_KEYS = ['vert', 'hor', 'vert2', 'hor2', 'l', 'alpha', 'forme']
 # Configuration globale des colonnes
 COL_WIDTHS = [240, 240, 240, 240, 240, 180, 480]
 COL_PROPORTIONS = [1, 1, 1, 1, 1, 0.75, 2]
@@ -30,45 +39,53 @@ COL_TOTAL_WIDTH = sum(COL_WIDTHS) + COL_SPACING * (len(COL_WIDTHS) - 1)
 
 
 class HeaderRow(BoxLayout):
-    def __init__(self, on_unit_click=None, **kwargs):
+    def __init__(self, columns_config, on_unit_click=None, **kwargs):
         super().__init__(**kwargs)
         self.orientation = 'horizontal'
         self.spacing = COL_SPACING
         self.size_hint_y = None
         self.size_hint_x = 1
-        self.height = 45 + COL_SPACING * 2
-        self.padding = [0, 0, 0, COL_SPACING*2]  # 10 pixels en bas pour le décoller
+        self.height = 50 + COL_SPACING
+        self.padding = [0, 0, 0, COL_SPACING] # Décolle l'en-tête du tableau en dessous
 
-        # Map colonne -> clé (doit correspondre à ColumnDefaultSpec)
-        self.col_keys = ['vert', 'hor', 'vert2', 'hor2', 'l', 'alpha', 'forme']
+        # 🎯 Sauvegarde de la configuration nettoyée reçue de la mère
+        self.columns_config_list = columns_config
 
-        # Génère dynamiquement les titres depuis AXIS_CONFIG ou utilise une fallback
-        titles = []
-        for key in self.col_keys:
-            if key == "forme":
-                titles.append(Tr("shape"))  # Traduction pour la colonne forme
+        # 🎯 CRÉATION ULTRA-RAPIDE DES CELLULES
+        for config in self.columns_config_list:
+            key = config["key"]
+            
+            # Détermination du texte et de la classe selon le type de colonne
+            if config["unit_type"] == "shape":
+                title_text = config["title"]
+                cell_class = LabeledCell
             else:
-                title = AXIS_CONFIG.get(key, {}).get("screen", key)
-                titles.append(title)
+                # Formatage industriel multi-lignes standardisé (ex: "Ø X\n[mm]")
+                title_text = f"{config['title']}\n[{config['unit_label']}]"
+                cell_class = HeaderCell
 
-        # Création des cellules d’en-tête
-        for i, (title, key) in enumerate(zip(titles, self.col_keys)):
-            cell_class = LabeledCell if key == 'forme' else HeaderCell
+            # Configuration des propriétés graphiques et des proportions
             kwargs_cell = {
-                'text': title,
+                'text': title_text,
                 'halign': 'center',
+                'valign': 'middle', # Aligne parfaitement le texte sur deux lignes
                 'bold': True,
                 'bg_color': (0.8, 0.8, 0.8, 1),
                 'text_color': (0, 0, 0, 1),
-                'size_hint_x': COL_PROPORTIONS[i],
+                'size_hint_x': config["size_hint_x"], # Récupéré de COL_PROPORTIONS via la mère
                 'width': None,
             }
 
-            # Pour HeaderCell : ajoute le `key` et `on_click`
-            if key != 'forme':
+            # Si ce n'est pas la colonne 'forme', on injecte la clé et l'événement de clic
+            if config["unit_type"] != "shape":
                 kwargs_cell.update({'key': key, 'on_click': on_unit_click})
 
+            # Instanciation de la cellule
             lbl = cell_class(**kwargs_cell)
+            
+            # Sécurité Kivy : recalcule le centrage strict pour le texte multi-lignes (\n)
+            lbl.bind(size=lambda instance, val: setattr(instance, 'text_size', val))
+            
             self.add_widget(lbl)
 
 class HeaderCell(ButtonBehavior, LabeledCell):
@@ -168,7 +185,9 @@ class RowEditor(BoxLayout):
                 self.inpf = InputCell(text=str(val), status=0, halign='left', size_hint_x=COL_PROPORTIONS[i], width=None)
                 # 🎯 LE TRIP CONCENTRE : La cellule forme s'abonne elle aussi à l'aiguillage unique !
                 self.inpf.bind(focus=lambda inst, foc, k=key: self._on_cell_focus_dispatcher(inst, foc, k))
-                input_row.add_widget(self.inpf); continue
+                self.inputs[key] = self.inpf
+                input_row.add_widget(self.inpf)
+                continue
 
             # Accès à la valeur formatée pour l'édition des axes numériques
             pv = getattr(self.entry.data, key)
@@ -210,26 +229,6 @@ class RowEditor(BoxLayout):
 
         self.add_widget(btn_row)
 
-    def INUTILISEE_on_input_focus(self, key):
-        def callback(instance, value):
-            self.selct_input_focus(key, value, instance)
-        return callback
-    
-    def INUTILISEE_selct_input_focus(self, key, value, instance):
-        if value:
-            # Gagne le focus : bloquer le refresh
-            self.display_blocked = True
-            self.focus_key = key
-        else:
-            # Perd le focus : déblocage possible
-            self.display_blocked = False
-            self.focus_key = None
-
-            # Remettre le formatage correct après édition
-            if key in self.inputs:
-                pv = getattr(self.entry.data, key)
-                self.inputs[key].text = pv.val_formatted(with_unit=False)
-#----- NEW -------------------------------------------------------
     def _on_cell_focus_dispatcher(self, instance, focused, key):
         """
         Aiguillage unique pour TOUTES les cellules du tableau (Axes, Segments, Formes).
@@ -322,8 +321,12 @@ class RowEditor(BoxLayout):
             if key == "forme": 
                 shape = self.entry.raw.get("shape", None)
                 if isinstance(shape, (list, tuple)) and len(shape) == 2 and shape is not None:
-                    self.inpf.text = self.entry.raw.get("shape_label") or f"{shape[0]} / {shape[1]}"
+                    testtext = self.entry.raw.get("shape_label") or f"{shape[0]} / {shape[1]}"
+                    self.inpf.text = f"TEST-{testtext}"
                 else: self.inpf.text = tr("no_shape")
+                # 2. On force la FAO locale à recalculer l'arc ou le chanfrein à partir 
+                # des nouveaux paramètres validés par la Pop-up, et on redessine l'écran !
+                self.parent_editor.refresh_drawing(recalc=True, idx=self.index, new_pos=None)
 
         # ─── 🏁 LE VÉRITABLE AIGUILLAGE FINAL ───
         if popup:
@@ -385,84 +388,11 @@ class RowEditor(BoxLayout):
         if hasattr(instance_input, 'cancel_selection'):
             instance_input.cancel_selection()
 
-#-----------------------------------------------------------------
     def on_input_changed(self, key):
         self.display_blocked = True
         def callback(instance, value):
             self.process_input_change(key, value, instance)
         return callback
-
-    def REMPLACED_on_focus_segment(self, instance, focused, key):
-        if not focused or getattr(self, 'popup_open', False):
-            return
-
-        self.popup_open = True
-        self.display_blocked = True
-        self.focus_key = key  # ← 'l' ou 'alpha'
-
-        popup_content = SegmentPopupContent(
-            data=copy.deepcopy(self.entry.data),
-            key_changed=self.key_changed,
-            on_confirm=self.on_segment_popup_confirm,
-            key_target=key
-        )
-
-        popup = Popup(
-            title=f"{TR("segment_config_title")} {key.upper()}",
-            content=popup_content,
-            size_hint=(None, None),
-            size=(800, 900),
-            auto_dismiss=False
-        )
-        popup_content.parent_popup = popup
-
-        def on_close(*args):
-            self.popup_open = False
-            self.display_blocked = False
-            self.focus_key = None
-
-        popup.bind(on_dismiss=on_close)
-        popup.open()
-    
-    def _REMPLACED_on_focus_calculateur(self, instance, focused, key):
-        """
-        Gère l'ouverture de la calculatrice d'atelier.
-        Bloque les rafraîchissements de l'interface pour sécuriser la saisie.
-        """
-        # 1. Sécurité anti-double ouverture (votre cinématique d'origine)
-        if not focused or getattr(self, 'popup_open', False):
-            return
-
-        # 2. Activation des verrous (On fige l'interface !)
-        self.popup_open = True
-        self.display_blocked = True  # 🎯 ICI : On bloque le rafraîchissement global
-        self.focus_key = key
-
-        # 3. Récupération des données de la cellule
-        pv = getattr(self.entry.data, key)
-        current_str_val = str(pv.val_base())
-        current_unit = pv.unit_id if hasattr(pv, 'unit_id') else "mm"
-
-        # 4. Création de la Pop-up avec son callback de validation
-        popup = CalculatorPopup(
-            current_value=current_str_val,
-            current_unit=current_unit,
-            update_value_callback=lambda val_calculee: self.on_calculateur_confirm(key, val_calculee, instance)
-        )
-
-        # 5. Fonction de fermeture : On relâche TOUS les verrous
-        def on_close_calc(*args):
-            self.popup_open = False
-            self.display_blocked = False  # 🔓 ICI : L'interface peut à nouveau se rafraîchir
-            self.focus_key = None
-            instance.focus = False  # Sécurité focus fantôme
-
-        # On lie la fermeture de la Pop-up au nettoyage des verrous
-        popup.bind(on_dismiss=on_close_calc)
-        popup.open()
-
-        # On masque le clavier virtuel natif du système (Windows/Android)
-        instance.focus = False
 
     def on_segment_popup_confirm(self, new_vert2, new_hor2, key='l'):
         # Convertir float → str si nécessaire
@@ -573,63 +503,21 @@ class RowEditor(BoxLayout):
                 )
                 # Mise à jour des autres champs (sauf celui en cours d'édition)
                 
-                print(f"DEBUG_ligne665: new_update = vrai")
+                print(f"DEBUG RowEditor_ligne590: new_update = vrai (process_input_change)")
                 self.refresh_inputs(key, forced=refresh_text)
 
         except ValueError:
             instance.foreground_color = (1, 0, 0, 1)  # Erreur = rouge
 
-    def REMPLACED_open_shape_editor(self, instance, focused):    
-        '''
-        Ouvre le formulaire de configuration de la terminaison à appliquer sur ce point
-
-        ShapeEditor(arg: )
-            - point_raw:     PointEntry:   Le point sur lequel travailler (contient toutes les informations actuelles et futures)
-            - prev_pnt_raw:  PointEntry[raw]   Le point précédent pour définir le segment arrivant à ce point
-            - next_pnt_raw:  PointEntry[raw]   Le point suivant pour définir le segment partant à ce point
-            - copied_shape_data: PointEntry[raw] Comme pointeur pour le copier/coller
-            - on_done :         Fonction de callback
-        '''
-        if not focused or getattr(self, 'popup_open', False):
-            return
-        self.popup_open = True 
-
-        prev_pnt_raw = self.parent_editor.points_part.entries[self.index - 1].raw if self.index > 0 else None
-        next_pnt_raw = self.parent_editor.points_part.entries[self.index + 1].raw if self.index + 1 < len(self.parent_editor.points_part.entries) else None  # Point suivant sécurisé
-        if prev_pnt_raw is None or next_pnt_raw is None:
-            print("Création de terminaison impossible")
-            return
-        
-        editor = ShapeEditor(
-            point_b=self.entry,
-            prev_pnt_raw=prev_pnt_raw,  # Point précédent
-            next_pnt_raw=next_pnt_raw,  # Point suivant
-            copied_shape_data=self.parent_editor.copied_shape,  # Presse-papier partagé
-            mirror_z=self.parent_editor.mirror_z,
-            on_done=self.shape_edit_done  # Callback
-        )
-
-        def on_close_shape(*args):
-            self.popup_open = False
-            shape = self.entry.raw.get("shape", None)
-            if isinstance(shape, (list, tuple)) and len(shape) == 2 and shape[0] is not None:
-                type_str, subtype_str = str(shape[0]), str(shape[1])
-                val_def = f"{type_str} / {subtype_str}"
-                val = self.entry.raw.get("shape_label") or val_def
-            else:
-                val = tr("no_shape")
-            self.inpf.text=str(val)        
-
-
-        editor.bind(on_dismiss=on_close_shape)
-        editor.open()
-        
     def shape_edit_done(self):
         ''' Callback à la fermeture de ShapeEditor()'''
+        # 1. On met à jour le texte visuel de la cellule dans le tableau Kivy
         self.refresh_shape_cell()
-        # TODO: Contrôler si à completter
-
-#    def validate(self, *args):
+        
+        # 2. On force la FAO locale à recalculer l'arc ou le chanfrein à partir 
+        # des nouveaux paramètres validés par la Pop-up, et on redessine l'écran !
+        self.parent_editor.refresh_drawing(recalc=True, idx=self.index, new_pos=None)
+        
     def on_exit(self, *args):
         try:
             #self.on_validate(self.index)
@@ -683,6 +571,8 @@ class RowEditor(BoxLayout):
             if (key == exclude_key or key == self.focus_key) and not forced:
                 continue  # Ne pas toucher à l'input en cours d'édition, sauf si c'est forced
 
+            if key == "forme": continue
+
             pv: PointValue = getattr(self.entry.data, key)
             input_cell.text = pv.val_formatted(with_unit=False)
     
@@ -690,6 +580,8 @@ class RowEditor(BoxLayout):
         if "forme" in self.inputs:
             shape = self.entry.raw.get("shape")
             shape_label = self.entry.raw.get("shape_label")
+            print(f">>> Shape label: {shape_label}")
+            print(f">>> Shape raw: {shape}")
 
             if isinstance(shape, (list, tuple)) and len(shape) == 2 and shape[0] is not None:
                 type_str, subtype_str = str(shape[0]), str(shape[1])
@@ -699,73 +591,125 @@ class RowEditor(BoxLayout):
                 val = tr("no_shape")
 
             self.inputs["forme"].text = val
+        else:
+            print("C'est la m...")
 
-    def refresh_profil_segments(self, index, large=False):
-        self.parent_editor.points_part.prof_seg_pnt_recompute(index, changed_pos=large)
-    
-class OLD_PointDrawEditor(BoxLayout):
-    def __init__(self, part_points, **kwargs):
+
+chemin_kv = os.path.join(os.path.dirname(__file__), "caograph.kv")
+if os.path.exists(chemin_kv):
+    Builder.load_file(chemin_kv)
+else:
+    print(f"[⚠️ WARN] Impossible de trouver le fichier graphique : {chemin_kv}")
+
+class CaoGraph(BoxLayout):
+    def __init__(self, **kwargs):
+        self.scale = 0.0025              
+        self.mirror_hor = False
+        self.mirror_vert = True
+        self.offset_base = [0.5, 0.5]   
+        self.offset_screen = [0.0, 0.0] 
+ 
+        # ON INSTANCIE LE CANVAS APRÈS LE SUPER POUR S'ASSURER DES IDS
+        self.canvas_piece = ProfilCanvas(
+            box=None, 
+            scale=self.scale, 
+            mirror_hor=self.mirror_hor, 
+            mirror_vert=self.mirror_vert, 
+            A_outline_width=1.5, 
+            A_fill_color=(0.1, 0.3, 0.1, 0.4)
+        )
+
         super().__init__(**kwargs)
-        self.points_part = part_points  # class PointManager()
-        self.orientation = 'vertical'
-        self.padding = 15
-        self.spacing = COL_SPACING
+
+    def on_kv_post(self, base_widget):
+        """ 🎯 DÉCLENCHEUR SÉCURISÉ : Les IDs Kivy sont prêts, on prépare le terrain. """
+        if not hasattr(self, 'ids') or not self.ids or 'zone_decoupe' not in self.ids:
+            return
+
+        stencil = self.ids.zone_decoupe
+        repere_calcul = self.ids.box_calcul_gauche  
         
-        self.mirror_z = False
-        # SWitcher dans le main() >>self.mode_tactile_actif = True  # False = Saisie directe clavier PC | True = Ouverture Calculatrice
-        self.editing_index = None
-        self.copied_entry = None    # ← copie de PointEntry (pour copier/coller)
-        self.copied_shape = {"shape": None, "shape_label": None, "shape_params": {}}    # ← copie de shape et shape_params (pour copier/coller uniquement la terminaison)       
-        #self.original_data = None   # ← copie de PointData avant édition pour comparaison
-        self.original_entry = None   # ← copie de PointEntry avant édition pour comparaison et UNDO:
-        self.disp_refresh_blocked = False
+        if stencil and repere_calcul:
+            # 1️⃣ Injection de l'axe blanc
+            self.axe_central = DashedLineWidget(
+                line_color=[1.0, 1.0, 1.0, 0.8], line_width=1.0,
+                dash_pattern=[dp(30), dp(5)], dash_spacing=dp(12)
+            )
+            stencil.add_widget(self.axe_central, index=0)            
 
-        '''Et remplacer ceci:
-        self.points_part.load(load_data=True)  # Charge/recharge les points depuis le .json et les metent à jour avec load_data
-         par:'''
-        self.points_part.data_loaded=True
-        self.points_part.update_entries_data()
+            # 2️⃣ Connexion et injection du canvas de la pièce
+            self.canvas_piece.box_dest = repere_calcul
+            stencil.add_widget(self.canvas_piece)
+            
+            # 🚀 3️⃣ CADENCEUR ASYNCHRONE DE DÉMARRAGE :
+            # On attend exactement 1/10ème de seconde (0.1s) pour que Kivy ait fini 
+            # de dessiner les fenêtres et que repere_calcul.size possède ses vrais pixels machine !
+            Clock.schedule_once(self.initialiser_dessin_test, 0.1)
 
+    def initialiser_dessin_test(self, dt):
+        """ Éteint l'écran noir et force le premier tracé au format utile. """
+        # On appelle votre méthode d'injection qui contient les cercles de tests
+        self.set_profil_pieces()
+        #print("[CaoGraph] Premier tracé de test initialisé avec succès.")
 
+    def set_profil_pieces(self, fao_list=None, cao_list=None, saved_list=None, box=None):
+        """
+        L'INJECTEUR DOUBLE CALQUE FAO/CAO FINAL :
+        Affiche la vraie pièce en cours d'édition (Vert/Bleu) par-dessus 
+        la pièce d'origine sauvegardée (Rose) avec un auto-scale pleine page.
+        """
+        #TODO: à réparrer
+        #repere_calcul = box if box is not None else self.ids.box_calcul_gauche
+        repere_calcul = self.ids.box_calcul_gauche
 
-        self.display_rows = []  # list des lignes affichées
+        # SÉCURITÉ DE CAPTURE DES LISTES DU MANAGER :
+        active_profile = cao_list if cao_list is not None else fao_list
+        
+        # Si la liste de sauvegarde n'est pas fournie, on va la chercher à la source
+        if saved_list is None:
+            from kivy.app import App
+            app = App.get_running_app()
+            if hasattr(app, "part") and hasattr(app.part, "saved_profile_seg_net"):
+                saved_list = app.part.saved_profile_seg_net
 
-        # Top bar with toggle button
-        top_bar = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(70), width = COL_TOTAL_WIDTH, spacing= 5)
+        # 📐 APPEL À VOTRE METHODE AUTO-ZOOM SUR LES VRAIS SEGMENTS DE LA PIÈCE
+        self.canvas_piece.update_entities_auto_scale_auto_center(
+            box_dest=repere_calcul,
+            a_entities=active_profile or [],  # La pièce verte (dessus)
+            b_entities=saved_list or [],     # La pièce rose (dessous)
+            code_entities="A+b",
+            save_code=True,
+            margin=[0.1,0.1]
+        )
 
-        self.toggle_mirror = ToggleButton(text=f"{Tr("mirror")} Z: {TR("off")}", state='normal', size_hint=(None,None), height=80, width = COL_TOTAL_WIDTH / 4, pos_hint={'center_y': 0.5})
-        self.toggle_mirror.bind(on_press=self.on_toggle_mirror)
+        # TRACÉ DE LA LIGNE D'AXE TOTALEMENT SÉCURISÉ (Plus de liste + float !)
+        if hasattr(self.canvas_piece, 'offset_0') and len(self.canvas_piece.offset_0) > 1:
+            y_axis_pos = self.canvas_piece.offset_0[1] # On prend la hauteur Y pixels
+            
+            x_debut = repere_calcul.pos[0]
+            x_fin = repere_calcul.pos[0] + repere_calcul.width
+            
+            self.axe_central.redraw_pos(
+                [x_debut, y_axis_pos], 
+                [x_fin, y_axis_pos]
+            )
 
-        part_name_txt = self.points_part.get_part_name()
-        self.part_name_lbl = LabeledCell(text=part_name_txt, halign='center', bold=True,
-                            bg_color=(0.4, 0.6, 0.4, 0.5),
-                            #text_color=(0, 0, 0, 1),
-                            height=60,
-                            font_size = 48,
-                            width = COL_TOTAL_WIDTH / 4,
-                            #size_hint_x=COL_PROPORTIONS[i], width=None),
-                            #on_click=self.open_part_manager_popup 
-                            on_click=self.open_part_popup
-                        )
+    def zoom_all_in_piece(self):
+        """ ZOOM AUTO PLEIN CADRE : Ré-aligne la loupe sur la vraie pièce mécanique """
+        from kivy.app import App
+        app = App.get_running_app()
+        manager = app.part if (hasattr(app, 'part') and app.part) else None
+        
+        if manager and hasattr(manager, "curent_profile_seg_net"):
+            # On appelle la fonction en lui injectant explicitement les vraies listes à jour !
+            self.set_profil_pieces(
+                cao_list=manager.curent_profile_seg_net,
+                saved_list=manager.saved_profile_seg_net
+            )
+        else:
+            # Sécurité si aucune pièce n'est chargée (Appel à vide d'origine)
+            self.set_profil_pieces()
 
-        top_bar.add_widget(self.part_name_lbl)
-        top_bar.add_widget(Widget())
-        top_bar.add_widget(self.toggle_mirror)
-        top_bar.add_widget(Widget())
-        self.add_widget(top_bar)
-
-        self.add_widget(HeaderRow(on_unit_click=self.on_header_unit_click))
-
-        self.scroll = ScrollView(size_hint=(1, 1))
-        self.display_rows = GridLayout(cols=1, spacing=10, size_hint_y=None)
-        self.display_rows.bind(minimum_height=self.display_rows.setter('height'))
-        self.scroll.add_widget(self.display_rows)
-        self.add_widget(self.scroll)
-
-        self.refresh()
-#----------------------------------------------
-
-from screen_base.common_screen import BaseScreenLayout
 
 class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
     def __init__(self, part_points, **kwargs):
@@ -792,6 +736,7 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
         DÉCLENCHEUR SÉCURISÉ : Clipse la barre d'outils CAO en haut 
         et le tableau de points dans le corps de droite de manière rectiligne.
         """
+        self.columns_config_list = self._build_columns_config() # configuration partagée des colonnes
         # =====================================================================
         # 🧱 MODULE A : DESSIN DE L'ENTÊTE HAUTE SPÉCIFIQUE CAO
         # =====================================================================
@@ -834,41 +779,125 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
         top_bar.add_widget(self.toggle_mirror)
 
         # =====================================================================
-        # 🧱 MODULE B : DESSIN DU CORPS DE FORMULAIRE (body_zone)
+        # 🧱 MODULE B : DESSIN DU CORPS DE FORMULAIRE À DEUX ÉTAGES (Splitter)
         # =====================================================================
-        # Conteneur vertical principal pour le tableau de coordonnées
-        corps_cao = BoxLayout(
-            orientation='vertical', 
-            padding=dp(15), 
-            spacing=dp(10)
-        )
+        # Conteneur principal qui va être injecté dans le châssis
+        corps_cao = BoxLayout(orientation='vertical', spacing=dp(5))
 
-        # Ajout de la ligne d'en-tête des colonnes du formulaire (Axes, Deltas, Formes)
-        corps_cao.add_widget(HeaderRow(on_unit_click=self.on_header_unit_click))
-
-        # Zone déroulante (Scroll) pour naviguer dans la liste infinie de points FAO
-        self.scroll = ScrollView(size_hint=(1, 1))
+        # --- 🏢 ÉTAGE SUPÉRIEUR : Le Tableau de Points ---
+        # On regroupe l'en-tête et le ScrollView dans un bloc vertical dédié
+        bloc_tableau = BoxLayout(orientation='vertical', spacing=dp(5), padding=[dp(1), dp(1), dp(1), 0])
+        bloc_tableau.add_widget(HeaderRow(columns_config=self.columns_config_list, on_unit_click=self.on_header_unit_click))
         
-        # Grille à 1 colonne qui reçoit dynamiquement vos lignes d'InputCell
+        self.scroll = ScrollView(size_hint=(1, 1),bar_width=dp(20))
+        # 2. On assigne les autres propriétés "en ligne" juste après    # Kivy les interceptera sans lever d'erreur de dictionnaire
+        self.scroll.scroll_type = ['bars']
+        self.scroll.bar_state = 'normal'    # L'INTELLIGENCE KIVY : Visible SEULEMENT si le défilement est nécessaire, mais reste fixe et affiché en permanence tant qu'il y a du scroll possible !
+        self.scroll.bar_inactive_width = dp(10) # On verrouille pour éviter que la barre ne rétrécisse si on la lâche
         self.display_rows = GridLayout(cols=1, spacing=dp(6), size_hint_y=None)
+        self.display_rows.padding = [0, 0, 0, dp(15)]
         self.display_rows.bind(minimum_height=self.display_rows.setter('height'))
-        
         self.scroll.add_widget(self.display_rows)
-        corps_cao.add_widget(self.scroll)
+        bloc_tableau.add_widget(self.scroll)
+
+        # 🎯 LE COMPOSANT SÉPARATEUR DE KIVY : Splitter
+        # On encapsule le tableau dans le Splitter. strip_size définit l'épaisseur de la barre grise.
+        splitter_tableau = Splitter(
+            sizable_from='bottom',  # La barre grise sera en bas du tableau et glissera vers le bas
+            size_hint_y=1.0,        # Par défaut, 2 = prend 2/3 de la hauteur de l'écran
+            min_size=dp(100),       # Hauteur minimale pour ne pas étouffer le tableau
+            strip_size=dp(7)       # Épaisseur de la barre grise déplaçable
+        )
+        splitter_tableau.add_widget(bloc_tableau)
+
+        # --- 🛠️ ÉTAGE INFÉRIEUR PUR ET NET ---
+        # 🚀 PLUS AUCUN BLOC INFÉRIEUR COMPLEXE ! 
+        # CaoGraph prend 100% de la largeur sous le séparateur et embarque ses propres boutons.
+        graphbox = CaoGraph(size_hint=(1, 1)) 
+        corps_cao.add_widget(splitter_tableau)
+        corps_cao.add_widget(graphbox)
 
         # =====================================================================
-        # 🎯 CLIPSAGE FINAL DANS LE CHÂSSIS PARENT HÉRITÉ
+        # 🎯 CLIPSAGE FINAL
         # =====================================================================
         self.injecter_entete_specifique(top_bar)
         self.injecter_corps_specifique(corps_cao)
 
-        # Lancement du premier rafraîchissement d'affichage du tableau
+        self.ids["graph_box"] = graphbox
+        self.ids["splitter_top"] = splitter_tableau
         self.refresh()
+        
+        '''# Optionnel : Charger le dessin initial de ta pièce dans la vue inférieure
+        graphbox.set_profil_pieces(
+            box=True, 
+            saved_list=self.points_part.saved_profile_seg_net, 
+            cao_list=self.points_part.curent_profile_seg_net
+        )'''
 
     def __del__(self):
         """Ferme l'éditeur et désactive le chargement des données"""
         #print("Fermeture de l'éditeur")
         self.points_part.data_loaded = False  # Désactive le chargement des données à la fermeture
+
+    def _build_columns_config(self):
+        """
+        🎯 LA MATRICE DU TABLEAU NETTOYÉE :
+        Exploite la fonction globale get_unit_config pour assembler 
+        les propriétés d'affichage et de configuration du tableau.
+        """
+        from configurator.config import AXIS_CONFIG, get_unit_config
+        
+        columns_config_list = []
+
+        for i, key in enumerate(COL_KEYS):
+            if key == "forme":
+                config = {
+                    "key": key,
+                    "title": Tr("shape"),
+                    "unit_label": "",
+                    "unit_type": "shape",
+                    "is_diameter": False,
+                    "size_hint_x": COL_PROPORTIONS[i],
+                    "decimals": 0,
+                    "long_name": ""
+                }
+            else:
+                # 1. Lecture brute de l'axe dans le JSON
+                axis_data = AXIS_CONFIG.get(key, {})
+                axis_label = axis_data.get("screen", key)
+                # 🎯 LE GRAAL : Appel direct de votre fonction unifiée !
+                unit_cfg = get_unit_config(axis_data.get("unit", "unit_distance"))
+                #unit_family = axis_data.get("type", "unit_distance") # ex: "unit_distance"
+                #json_unit_target = axis_data.get("unit", unit_family) # ex: "unit_distance" ou "inch"
+
+                '''# 2. Traduction de la cible pour vos outils d'analyse d'alias
+                alias_map = {
+                    "unit_distance": "dist",
+                    "unit_angle": "ang",
+                    "unit_speed": "speed"
+                }
+                recherche_key = alias_map.get(json_unit_target, json_unit_target)
+                '''
+
+                # 3. Gestion cosmétique du diamètre automatique
+                is_diameter = (axis_data.get("factor") == 2)
+                full_title = f"Ø {axis_label}" if is_diameter else axis_label
+
+                # 4. Stockage unifié dans la matrice
+                config = {
+                    "key": key,
+                    "title": full_title,
+                    "unit_label": unit_cfg["label"],       # ex: "mm"
+                    "unit_type": axis_data.get("unit", "unit_distance"),
+                    "is_diameter": is_diameter,
+                    "size_hint_x": COL_PROPORTIONS[i],
+                    "decimals": unit_cfg["decimals"],     # ex: 3
+                    "long_name": unit_cfg["long_name"]     # ex: "Millimètre"
+                }
+            
+            columns_config_list.append(config)
+                
+        return columns_config_list
 
     def on_toggle_mirror(self, btn):
         if self.editing_index is not None:
@@ -886,62 +915,77 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
             self.refresh()
 
     def open_part_popup(self, *args):
-        def part_update(id_part=None, save_last= False, reload_json = False):
+        def part_update(id_part=None, save_last=False, reload_json=False):
             """
-            Met à jour ou change la pièce active :
-            - id_part : change de pièce si précisé
-            - save_last : sauvegarde la pièce courante avant de changer
-            - reload_json : recharge les points depuis le JSON sinon recalcule depuis raw
+            Met à jour ou change la pièce active de manière étanche.
             """
-                
-            # 0. Vérifie la validité de l'index
+            # 0. Vérifie la validité de l'index dans le catalogue
             index = self.points_part.storage.part_id_actif if id_part is None else id_part
             all_names = self.points_part.get_part_all_names()
             if not (0 <= index < len(all_names)):
                 print(f"[Erreur] Index de pièce invalide : {index}")
                 return
 
-            # 1. Sauvegarde la pièce courante (points + nom si modifié)
+            # 1. Sauvegarde la pièce courante uniquement si l'opérateur l'a demandé
             if save_last:
-                self.save_points_to_data()  # ← déjà existant
-                self.points_part.commit_part_names()  # ← si noms modifiés
+                self.save_current_profile_to_json()  
+                self.points_part.commit_part_names()  
 
-            # 2. Change l'index actif dans le stockage
+            # 2. On mémorise si l'opérateur change réellement de numéro de pièce
+            has_changed_part = (index != self.points_part.storage.part_id_actif)
+
+            # Change l'index actif dans le module de stockage
             self.points_part.storage.set_selected_index(index)
 
-            # 3. Recharge les points de la nouvelle pièce
-            if reload_json:
+            # 3. 🚀 SÉCURITÉ DE CHARGEMENT :
+            # Si on change de pièce OU si le rechargement est forcé, on appelle obligatoirement .load().
+            # Cela vide la mémoire, charge les nouveaux points et initialise le fond rose de la nouvelle pièce.
+            if reload_json or has_changed_part:
                 self.points_part.load(load_data=True)
             else:
-                self.points_part.update_entries_data()  # recalculer tous les points (depuis leur PointEntry.raw)
+                # Simple rafraîchissement local (ex: changement d'unités de colonnes)
+                self.points_part.update_entries_data()  
 
-            # 4. Réinitialise l'état local
-            self.editing_index = None   # si un point et en édition on sort du mode édition (sans enregistrer).
-            #self.original_data = None   # ré-initialise pour la prochainne édition d'un point
+            # 4. Réinitialise complètement l'état local d'édition pour la nouvelle pièce
+            self.editing_index = None   
             self.original_entry = None
 
-            # 5. Met à jour le nom affiché de la pièce
+            # 5. Met à jour le libellé du nom de la pièce en haut du formulaire
             self.part_name_lbl.text = self.points_part.get_part_name()
 
-            # 6. Rafraîchit l'affichage
+            # 6. Rafraîchit l'affichage complet (Tableau textuel + Dessin du bas)
             self.refresh()
         
-        # 🆕 Met à jour le label à la fermeture, même sans clic
         def on_popup_dismiss(*_):
             self.part_name_lbl.text = self.points_part.get_part_name()
 
         popup = PartManagerPopup(manager=self.points_part, refresh_callback=part_update)
         popup.bind(on_dismiss=on_popup_dismiss)
-
         popup.open()
 
-    def refresh(self, forced_disp = False):
-        # Appel au contrôleur principal pour notifier un changement
+    def refresh(self, forced_disp=False):
+        """
+        🎯 LE HUB DE CENTRALISATION IHM RAPIDE :
+        Met à jour le dessin CAO en temps réel à chaque frappe de caractère,
+        mais gèle le tableau textuel pour empêcher la perte de focus du clavier.
+        """
+        #print(">>>>>>>>>>>>>>>>> REFRESH PointDraw <<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+
+        # 1️⃣ Notification vers le main.py (votre code)
         App.get_running_app().refresh_propage("draw_editor")
 
-        # Met à jour l'affichage texte uniquement si pas en édition
-        if forced_disp or self.disp_refresh_blocked != True:
-            self.refresh_display()
+        # 2️⃣ 🚀 LE TRACÉ GÉOMÉTRIQUE EN DIRECT À LA FRAPPE
+        self.refresh_drawing(recalc=False)
+
+        # 3️⃣ 🛡️ LE BOUCLIER THERMIQUE DU CLAVIER (Focus)
+        # Si le rafraîchissement est bloqué (IHM en cours d'édition textuelle active),
+        # ON S'ARRÊTE NET ICI. On s'interdit de reconstruire le tableau de lignes 
+        # pour que le RowEditor ne soit pas détruit sous les doigts de l'opérateur.
+        if self.disp_refresh_blocked and not forced_disp:
+            return  # 🚀 BLOCAGE STRATÉGIQUE DU TEXTE UNIQUEMENT
+
+        # 4️⃣ Reconstruction propre du tableau textuel (uniquement en sortie de case ou si forcé)
+        self.refresh_display()
 
     def refresh_display(self):
         from functools import partial
@@ -982,8 +1026,25 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
                 row.bind(on_touch_down=partial(self._on_row_touch_wrapper, index=i))
                 self.display_rows.add_widget(row)
 
+    def refresh_drawing(self, recalc=True, idx=None, new_pos=None):
+        if recalc:
+            self.points_part.refresh_drawing(idx, new_pos)
+        elif idx and new_pos:
+            self.points_part.entries[idx].raw["pos"] = new_pos
+            self.points_part.entries[idx].modified_data = True
+        # Injection immédiate dans le canvas OpenGL de votre CaoGraph
+        if 'graph_box' in self.ids and self.ids['graph_box']:
+            self.ids['graph_box'].set_profil_pieces(
+                box=True, 
+                fao_list=[], 
+                cao_list=self.points_part.curent_profile_seg_net # La ligne verte se déforme en direct !
+            )
+
     def update_row_data(self, index, new_hor, new_vert, refresh=True):
-        # Créé un nouveau pos en unité de base
+        """Mise à jour d'une rangée via l'IHM tactile (Boutons +/-, molettes ou raccourcis)."""
+
+        print(f"[DEBUG update_row_data] idx {index} >> new_hor:{new_hor}  new_vert:{new_vert}  refresh:{refresh}")
+
         new_pos = [int(round(new_hor)), int(round(new_vert))]
 
         entry = self.points_part.entries[index]
@@ -992,12 +1053,16 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
         prev_pos = [prev_data.hor.val_base(), prev_data.vert.val_base()] if prev_data else None
         next_pos = [next_data.hor.val_base(), next_data.vert.val_base()] if next_data else None
         
-        # Mets à jour .data uniquement, pas .raw
+        # 1. Mise à jour de la couche d'IHM textuelle (.data)
         entry.data.recompute(pos=new_pos, prev_pos=prev_pos)
         if next_pos:
             self.points_part.entries[index + 1].data.recompute(pos=next_pos, prev_pos=new_pos)
 
-        # Si vrai reconstruit toutes les linges du formulaire
+        # 🚀 2. ALIGNEMENT GÉOMÉTRIQUE : On synchronise également le .raw de la mémoire vive        
+        # On demande au manager de recalculer la trigo locale (N-1, N, N+1)
+        self.refresh_drawing(recalc=True, idx=index, new_pos=new_pos)
+
+        # 3. Si vrai, reconstruit toutes les lignes du formulaire et le dessin
         if refresh:
             self.refresh()
 
@@ -1006,6 +1071,7 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
             return False  # Ne rien faire si le clic n’est pas dans la ligne
         if self.editing_index is not None and self.editing_index != index:
             #self.cancel_edit()
+            self.edit_row(None)
             try:
                 self.data_pos_to_raw(self.editing_index)
             except Exception as e:
@@ -1038,28 +1104,43 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
         #else:
         #    self.points_part.update_entries_data()
         #self.editing_index = None
-        #self.refresh()
         self.edit_row(None)
+        #self.refresh()
 
     def data_pos_to_raw(self, index):
+        """🚀 VALIDATION LOCALE : Transfère les cotes IHM dans la mémoire vive (.raw)"""
+        # 1. On remet la variable de blocage à False avant de reconstruire !
+        self.disp_refresh_blocked = False
+
         entry = self.points_part.entries[index]
         if entry.data is None:
             return
-        # Conversion des valeurs affichées vers valeurs à sauver
+            
         hor_base = entry.data.hor.val_base()
         vert_base = entry.data.vert.val_base()
-        if self.mirror_z:
-            hor_base = -hor_base
 
+        # 1. On applique les changements dans le dictionnaire de travail
         entry.raw["pos"] = [hor_base, vert_base]
         entry.modified_data = True
 
-        self.save_points_to_data()
+        # 2. On demande au PointManager de recalculer le voisinage géométrique en microns
+        self.points_part.update_entry_data(index)
+
+        # 3. On ferme la ligne d'édition (ZÉRO SAUVEGARDE SUR LE DISQUE ICI !)
         self.edit_row(None)
 
-    def save_points_to_data(self):
-        # Mets à jour la pièce dans le fichier
-        self.points_part.save()      
+    def save_current_profile_to_json(self):
+        """
+        💾 ACTION OPÉRATEUR VOLONTAIRE : 
+        Écrit concrètement l'état actuel de la mémoire vive sur le disque dur,
+        et fige la nouvelle silhouette de référence dans le calque de fond rose.
+        """
+        # Appelle la méthode .save() du PointManager que nous avons écrite ensemble
+        # (C'est elle qui écrit le JSON et synchronise le calque rose)
+        self.points_part.save()  
+        
+        # On force un rafraîchissement global pour caler les calques à l'écran
+        self.refresh(forced_disp=True)    
 
     def insert_point(self, index, entry_paste=None):
         """
@@ -1097,19 +1178,55 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
 
     # En tête
     def on_header_unit_click(self, key):
-        unit_type, current_unit = self.points_part.unit_spec.get_unit(key)
+        """
+        🎯 LE DÉCLENCHEUR DU POPUP CENTRALISÉ :
+        Déduit la famille d'unité de la colonne cliquée, génère les options enrichies
+        (avec long_name) pour le choix tactile, et orchestre la sauvegarde persistante.
+        """
+        from configurator.config import get_unit_type, get_all_units_for_type
         
-        spec = self.points_part.unit_spec.unit_map.get(key).unit_id # Accéder directement au `unit_map` pour obtenir la clé
-        options = self.points_part.get_units_for_type(unit_type, with_labels=True)
+        # 1. On extrait la configuration de la colonne depuis la matrice de la mère
+        col_cfg = next((c for c in self.columns_config_list if c["key"] == key), None)
+        if not col_cfg:
+            return
 
-        def on_unit_select(unit_id):
-            self.points_part.unit_spec.set_unit(key, unit_id)
-            self.points_part.update_entries_data()  # ← recalcul les valeurs avec les nouvelles unités
+        current_target = col_cfg["unit_type"] # ex: "unit_distance" ou "inch"
+
+        # 2. Utilisation de vos fonctions globales sécurisées
+        family_type = get_unit_type(current_target) or current_target
+        
+        # 🎯 ON ACTIVE LES DEUX FLAGS : Pour obtenir les paires (id, "label (Nom Long)")
+        options = get_all_units_for_type(family_type, with_labels=True, with_long_names=True)
+
+        # 3. Logique exécutée uniquement si l'opérateur clique sur "Valider"
+        def on_unit_select(selected_uid):
+            from configurator.config import SETTINGS, save_json
+            
+            # Si l'opérateur choisit 'default', on réassocie la famille globale ("unit_distance")
+            if selected_uid == 'default':
+                SETTINGS["axis"][key]["unit"] = family_type
+            else:
+                # Sinon on verrouille l'unité choisie en dur ('inch', 'mm', etc.)
+                SETTINGS["axis"][key]["unit"] = selected_uid
+                
+            # Sauvegarde physique dans user_settings.json
+            save_json()
+            
+            # 🔄 RECONSTRUCTION DE LA MATRICE : Recalcule immédiatement les nouveaux labels
+            self.columns_config_list = self._build_columns_config()
+            
+            # Recalcul des valeurs de vos points CAO (conversion de cotes)
+            self.points_part.update_entries_data()
+            
+            # Rafraîchissement complet de l'affichage de l'écran
             self.refresh(forced_disp=True)
 
-        self.open_unit_selection_popup(key, options, on_unit_select, current_unit=spec)
+        # 4. Déclenchement du Popup tactile
+        # Si l'unité est celle par défaut, on passe None pour activer la case 'default'
+        popup_current_unit = None if current_target == family_type else current_target
+        self.open_unit_selection_popup(key, options, on_unit_select, unit_type=family_type, current_unit=popup_current_unit)
 
-    def open_unit_selection_popup(self, key, options, on_select_callback, current_unit=None):
+    def open_unit_selection_popup(self, key, options, on_select_callback, unit_type, current_unit=None):
         """
         Affiche un popup Kivy pour sélectionner une unité avec boutons en bas :
         Annuler | Valider
@@ -1136,7 +1253,7 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
 
         def on_option_press(unit_id):
             def callback(instance):
-                selected_unit['unit_id'] = None if unit_id == 'default' else unit_id
+                selected_unit['unit_id'] = unit_type if unit_id == 'default' else unit_id
             return callback
 
         for uid, label in full_options:
@@ -1217,13 +1334,10 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
         RÉVEIL INTERNE CAO : Appelée par le main.py quand la page prend le focus.
         Gère la synchronisation de ses propres onglets et de son tableau.
         """
-        # 1. On synchronise l'onglet visuel de notre barre d'outils locale
-        if 'tools_bar' in self.ids:
-            tb = self.ids.tools_bar
-            if 'btn_cao' in tb.ids: tb.ids.btn_cao.set_status(1) # CAO brille en vert
-            if 'btn_fao' in tb.ids: tb.ids.btn_fao.set_status(0) # DRO s'éteint
-
-        # 2. Forcer le rafraîchissement complet du tableau de points de la pièce
+        
         self.refresh()
         
         print("[PAGE CAO] Réveil et reconstruction autonome du tableau de points.")
+
+
+Builder.load_file("part/draw_data.kv")

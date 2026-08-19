@@ -1,0 +1,174 @@
+# configurator/ dro_machine.kv
+
+#:import dp kivy.metrics.dp
+
+
+<OffsetPageHeader>:
+    orientation: "horizontal"
+    size_hint_y: 1.0
+    padding: ["15dp", "4dp", "8dp", "4dp"]
+    canvas.before:
+        Color:
+            rgba: 0.15, 0.15, 0.18, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    Label:
+        text: "📐 TABLE COMPLÈTE DES CORRECTEURS DE JAUGES"
+        bold: True
+        font_size: "14sp"
+        halign: "left"
+        text_size: self.size
+        valign: "middle"
+
+<OffsetPageDashboard>:
+    orientation: 'vertical'    # Division par ligne
+    canvas.before:
+        Color:
+            rgba: 0.08, 0.08, 0.1, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+      
+    BoxLayout:    # Ligne 2 Division par colonne
+        orientation: 'horizontal'
+        size_hint: (1, 1)
+        padding: 0
+        
+        Label:
+            text: "Uitilsation des mémoires \tet \tdu palpeur:"
+            bold: False
+            font_size: '12sp'
+            size_hint_x: None
+            width: self.texture_size[0]
+            valign: 'middle'
+            text_size: None, self.height
+    
+    BoxLayout:    # Ligne 1 Division par colonne
+        orientation: 'horizontal'
+        size_hint: (1, 1)
+        padding:  dp(20)
+        spacing: dp(20)
+        
+        BoxLayout:    # Colonne 1
+            orientation: 'vertical'
+            size_hint: (1, 1)
+            padding: dp(20)
+
+            Label:
+                text: "Homin Y :"
+                bold: False
+                font_size: '12sp'
+                size_hint_x: None
+                width: self.texture_size[0]
+                valign: 'middle'
+                text_size: None, self.height
+
+            Label:
+                text: "(Homin r) si utilisé ! :"
+                bold: False
+                font_size: '12sp'
+                size_hint_x: None
+                width: self.texture_size[0]
+                valign: 'middle'
+                text_size: None, self.height
+
+            Widget:
+                size_hint_y: 1 
+    
+        BoxLayout:    # Colonne 2
+            orientation: 'vertical'
+            size_hint: (1, 1)
+            padding: dp(20)
+            canvas.before:
+                Color:
+                    rgba: 0.1, 0.1, 0.15, 0.75
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+
+            Label:
+                text: "Angle Y :"
+                bold: False
+                font_size: '12sp'
+                size_hint_x: None
+                width: self.texture_size[0]
+                valign: 'middle'
+                text_size: None, self.height
+            Label:
+                text: "Angle tourelle porte outil (ex: Miltifix) :"
+                bold: False
+                font_size: '12sp'
+                size_hint_x: None
+                width: self.texture_size[0]
+                valign: 'middle'
+                text_size: None, self.height
+
+            Widget:
+                size_hint_y: 1 
+    
+        BoxLayout:    # Colonne 3
+            orientation: 'vertical'
+            size_hint: (1, 1)
+            padding: 0
+            canvas.before:
+                Color:
+                    rgba: 0.15, 0.1, 0.1, 0.75
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+
+            Label:
+                text: "réf 0,0 pièce:"
+                bold: False
+                font_size: '12sp'
+                size_hint_x: None
+                width: self.texture_size[0]
+                valign: 'middle'
+                text_size: None, self.height
+
+            Label:
+                text: "Hominig X Z :"
+                bold: False
+                font_size: '12sp'
+                size_hint_x: None
+                width: self.texture_size[0]
+                valign: 'middle'
+                text_size: None, self.height
+
+            Widget:
+                size_hint_y: 1 
+    
+    BoxLayout:    # Ligne 3 Division par colonne
+        orientation: 'horizontal'
+        size_hint: (1, 1)
+        padding: 0
+        canvas.before:
+            Color:
+                rgba: 0.1, 0.15, 0.1, 0.75
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+
+
+
+    FloatLayout:
+        size_hint_y: None
+        height: 0
+
+        # 🟦 Le conteneur  supperposé
+        BoxLayout:
+            id: Construction_box
+            size_hint: None, None
+            size: root.size        # Taille de OffsetPageDashboard
+            pos: root.pos         # Position sur l'écran = OffsetPageDashboard
+            padding: 2
+            orientation: 'vertical'
+
+            Label:
+                text: "\n🚧 Registre des [Homing], [Décallages], [Palpage d'angles], ... en cours de construction..."
+                font_size: '25sp'
+                color: [0.9, 0.5, 0.0, 1]
+                halign: "center"
+

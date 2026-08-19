@@ -4,7 +4,7 @@ from .thread_relief_iso import ThreadReliefISOShape
 from .round_corner import RoundedCornerShape, RoundedShape
 from .chamfer import ChamferShape
 
-shape_templates = {
+OLD_shape_templates = {
     'standard':{
         'name_txt': 'Simple',
         'subtypes': {
@@ -43,6 +43,48 @@ shape_templates = {
             }
         }
     }
+}
+shape_templates = {
+    'angle':{
+        'name_txt': 'Angles',
+        'subtypes': {
+            'Chanfrein': {
+                'class': ChamferShape,
+                'plugin_id': None
+            },
+            'Congé': {
+                'class': RoundedCornerShape,
+                'plugin_id': None
+            },
+
+            'Arc rayon': {
+                'class': RoundedShape,
+                'plugin_id': None
+            }
+        }
+
+    },
+    'gorge': {
+        'name_txt': 'Gorges',
+        'subtypes': {
+            'Filet_ISO': {
+                'class': ThreadReliefISOShape,
+                'plugin_id': None
+            }
+        }
+    },
+
+    'bosse': {
+        'name_txt': 'Bossages-Creux',
+        'subtypes': {
+        }
+    },
+    
+    'divers': {
+        'name_txt': 'Autres',
+        'subtypes': {
+        }
+    }    
 }
 
 def register_shape_type(type_name, subtype_name, shape_class, shape_name_txt):

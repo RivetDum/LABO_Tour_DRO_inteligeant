@@ -1,0 +1,194 @@
+# common_widgets.kv
+
+# Dans votre fichier .kv commun (Version de secours simplifiée et sécurisée)
+
+<BtnSwitchImageLed>:
+    # 🦺 BLINDAGE CHRONOLOGIQUE : On s'assure que root.suffixe_act est prêt
+    suffixe_act: "_a" if (root.target_screen and app.screen_actif == root.target_screen) else "_ia"
+
+    # 🧱 SUPERPOSITION EN RELIEF MULTI-ETAGES (Zéro flou)
+    canvas.before:
+        # 🟢 A. RECTANGLE EXTÉRIEUR (Le Cadre Lumineux d'État)
+        Color:
+            # Sécurisé : Si root.target_screen est vide au démarrage, Kivy applique un gris neutre sans planter
+            rgba: app.theme_colors["status_" + getattr(app, root.target_screen)["status"].lower() + root.suffixe_act] if root.target_screen else [0.3, 0.3, 0.35, 1]
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(4)]
+
+        # 🟢 B. RECTANGLE INTÉRIEUR (Le Fond du Bouton / Les "Beaux Gosses" du Nouveau Thème)
+        Color:
+            # Épuré : Utilise vos vraies nouvelles clés du thème d'atelier !
+            rgba: app.theme_colors["btn_bg_a" if app.screen_actif == root.target_screen else "btn_bg_ia"]
+        RoundedRectangle:
+            # L'effet d'enfoncement physique mécanique 3D
+            pos: (self.x + dp(2), self.y + dp(2)) if app.screen_actif == root.target_screen else (self.x + dp(1), self.y + dp(1))
+            size: (self.width - dp(4), self.height - dp(4)) if app.screen_actif == root.target_screen else (self.width - dp(2), self.height - dp(2))
+            radius: [dp(3)]
+
+    # 🔀 LE DISPATCHER INTERNE AUTOMATIQUE (Image et/ou Texte)
+    Image:
+        source: getattr(app, root.target_screen)["icon"] if (root.target_screen and getattr(app, root.target_screen)["icon"]) else ""
+        size_hint_y: 0.55 if (root.target_screen and getattr(app, root.target_screen)["icon"]) else 0
+        opacity: 1 if (root.target_screen and getattr(app, root.target_screen)["icon"]) else 0
+        allow_stretch: True
+
+    Label:
+        text: getattr(app, root.target_screen)["text"] if (root.target_screen and "text" in getattr(app, root.target_screen)) else ""
+        font_size: "10sp"
+        bold: True
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+        size_hint_y: 0.45 if (root.target_screen and getattr(app, root.target_screen)["icon"]) else 1.0
+        # Le texte s'illumine si sélectionné, sinon reste en blanc/gris discret
+        color: app.theme_colors["status_" + getattr(app, root.target_screen)["status"].lower() + root.suffixe_act] if (root.target_screen and app.screen_actif == root.target_screen) else [0.7, 0.7, 0.7, 1]
+
+<OLD_BottonImageLed>:
+    # --- [Vos rectangles 3D de canvas restent inchangés] ---
+    canvas.before:
+        Color:
+            rgba: app.theme_colors["status_" + getattr(app, root.target_screen)["status"].lower() + root.suffixe_act] if root.target_screen else [0.3, 0.3, 0.35, 1]
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(4)]
+        Color:
+            rgba: app.theme_colors["btn_bg_a" if app.screen_actif == root.target_screen else "btn_bg_ia"]
+        RoundedRectangle:
+            pos: (self.x + dp(2), self.y + dp(2)) if app.screen_actif == root.target_screen else (self.x + dp(1), self.y + dp(1))
+            size: (self.width - dp(4), self.height - dp(4)) if app.screen_actif == root.target_screen else (self.width - dp(2), self.height - dp(2))
+            radius: [dp(3)]
+
+    # 🔀 LE DISPATCHER PILOTÉ PAR L'AUTOMATE PYTHON
+    Image:
+        source: getattr(app, root.target_screen)["icon"] if (root.target_screen and getattr(app, root.target_screen)["icon"]) else ""
+        
+        # 🎯 LA SÉCURITÉ ROYALE : L'image lit simplement la StringProperty !
+        size_hint_y: 0.55 if root.display_mode == "BOTH" else (1.0 if root.display_mode == "ICON_ONLY" else 0)
+        opacity: 0 if root.display_mode == "TEXT_ONLY" else 1
+        allow_stretch: True
+
+    Label:
+        text: getattr(app, root.target_screen)["text"] if (root.target_screen and "text" in getattr(app, root.target_screen)) else ""
+        font_size: "10sp" if root.display_mode == "BOTH" else "14sp"
+        bold: True
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+        
+        # 🎯 LA FIN DU FANTÔME : Si c'est ICON_ONLY (État Y), le hint passe à None et height s'écrase à 0 !
+        size_hint_y: 0.45 if root.display_mode == "BOTH" else (1.0 if root.display_mode == "TEXT_ONLY" else None)
+        height: 0 if root.display_mode == "ICON_ONLY" else self.height
+        opacity: 0 if root.display_mode == "ICON_ONLY" else 1
+        
+        color: app.theme_colors["status_" + getattr(app, root.target_screen)["status"].lower() + root.suffixe_act] if app.screen_actif == root.target_screen else [0.7, 0.7, 0.7, 1]
+<BottonImageLed>:
+    canvas.before:
+        # A. LE CADRE LED (Recomposition 100% locale)
+        Color:
+            rgba: app.theme_colors["status_" + root.status_led + root.suffixe_act]
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(6), dp(9), dp(6), dp(4)] if app.screen_actif == root.target_screen else [dp(5), dp(4), dp(5), dp(7)]
+        # B. LE FOND COMPLET
+        Color:
+            rgba: app.theme_colors["btn_bg_a" if app.screen_actif == root.target_screen else "btn_bg_ia"]
+        RoundedRectangle:
+            pos: (self.x + dp(1.5), self.y + dp(1.5)) if app.screen_actif == root.target_screen else (self.x + dp(3), self.y + dp(2))
+            size: (self.width - dp(5), self.height - dp(5)) if app.screen_actif == root.target_screen else (self.width - dp(4), self.height - dp(3))
+            radius: [dp(6), dp(8), dp(6), dp(5)] if app.screen_actif == root.target_screen else [dp(7), dp(5), dp(7), dp(10)]
+
+    Image:
+        source: root.source_image
+        size_hint_y: 0.55 if root.display_mode == "BOTH" else (1.0 if root.display_mode == "ICON_ONLY" else 0)
+        opacity: 0 if root.display_mode == "TEXT_ONLY" else 1
+        allow_stretch: True
+        size_hint_x: None
+        width: self.height
+        pos_hint: {"center_x": 0.5}
+
+    Label:
+        text: root.text_bouton
+        font_size: "10sp" if root.display_mode == "BOTH" else "14sp"
+        bold: True
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+        size_hint_y: 0.45 if root.display_mode == "BOTH" else (1.0 if root.display_mode == "TEXT_ONLY" else None)
+        height: 0 if root.display_mode == "ICON_ONLY" else self.height
+        opacity: 0 if root.display_mode == "ICON_ONLY" else 1
+        color: app.theme_colors["status_" + root.status_led + root.suffixe_act] if app.screen_actif == root.target_screen else [0.7, 0.7, 0.7, 1]
+
+<SwitchImageLed>:
+    canvas.before:
+        # A. LE CADRE LED (Recomposition locale blindée)
+        Color:
+            rgba: app.theme_colors["status_error_a"] if root.status_led == "error" else app.theme_colors[root.prefixe + "status_ok" + root.suffixe_act]
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(6), dp(9), dp(6), dp(4)] if app.mode_tactile_actif else [dp(5), dp(4), dp(5), dp(7)]
+            
+        # B. LE FOND COMPLET
+        Color:
+            rgba: app.theme_colors["sw_bg_a" if app.mode_tactile_actif else "sw_bg_ia"]
+        RoundedRectangle:
+            pos: (self.x + dp(1.5), self.y + dp(1.5)) if app.mode_tactile_actif else (self.x + dp(3), self.y + dp(2))
+            size: (self.width - dp(5), self.height - dp(5)) if app.mode_tactile_actif else (self.width - dp(4), self.height - dp(3))
+
+    Image:
+        source: root.source_image
+        size_hint_y: 0.55 if root.display_mode == "BOTH" else (1.0 if root.display_mode == "ICON_ONLY" else 0)
+        opacity: 0 if root.display_mode == "TEXT_ONLY" else 1
+        allow_stretch: True
+        size_hint_x: None
+        width: self.height
+        pos_hint: {"center_x": 0.5}
+
+    Label:
+        text: root.text_bouton
+        font_size: "10sp" if root.display_mode == "BOTH" else "14sp"
+        bold: True
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+        size_hint_y: 0.45 if root.display_mode == "BOTH" else (1.0 if root.display_mode == "TEXT_ONLY" else None)
+        height: 0 if root.display_mode == "ICON_ONLY" else self.height
+        opacity: 0 if root.display_mode == "ICON_ONLY" else 1
+        color: app.theme_colors["status_" + root.status_led + root.suffixe_act] if app.mode_tactile_actif else [0.6, 0.6, 0.6, 1]
+
+<OLD_SwitchImageLed>:   # 🎛️ COPIE CONFORME POUR LE SWITCH IMAGE LED
+    canvas.before:
+        Color:
+            rgba: app.theme_colors[root.prefixe + "status_" + getattr(app, root.target_screen)["status"].lower() + root.suffixe_act] if root.target_screen else [0.3, 0.3, 0.35, 1]
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(4)]
+        Color:
+            rgba: app.theme_colors["sw_bg_a" if app.mode_tactile_actif else "sw_bg_ia"]
+        RoundedRectangle:
+            pos: (self.x + dp(2), self.y + dp(2)) if app.mode_tactile_actif else (self.x + dp(1), self.y + dp(1))
+            size: (self.width - dp(4), self.height - dp(4)) if app.mode_tactile_actif else (self.width - dp(2), self.height - dp(2))
+            radius: [dp(3)]
+
+    Image:
+        source: getattr(app, root.target_screen)["icon"] if (root.target_screen and getattr(app, root.target_screen)["icon"]) else ""
+        size_hint_y: 0.55 if root.display_mode == "BOTH" else (1.0 if root.display_mode == "ICON_ONLY" else 0)
+        opacity: 0 if root.display_mode == "TEXT_ONLY" else 1
+        allow_stretch: True
+
+    Label:
+        text: getattr(app, root.target_screen)["text"] if (root.target_screen and "text" in getattr(app, root.target_screen)) else ""
+        font_size: "10sp" if root.display_mode == "BOTH" else "14sp"
+        bold: True
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+        size_hint_y: 0.45 if root.display_mode == "BOTH" else (1.0 if root.display_mode == "TEXT_ONLY" else None)
+        height: 0 if root.display_mode == "ICON_ONLY" else self.height
+        opacity: 0 if root.display_mode == "ICON_ONLY" else 1
+        color: app.theme_colors["status_" + getattr(app, root.target_screen)["status"].lower() + root.suffixe_act] if (root.target_screen and app.mode_tactile_actif) else [0.6, 0.6, 0.6, 1]
