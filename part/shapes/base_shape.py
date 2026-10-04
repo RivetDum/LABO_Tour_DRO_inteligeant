@@ -41,7 +41,10 @@ class BaseShape:
         self.shape_start = copy.deepcopy(self.point_b)  # Position de départ du 1er segment
         self.shape_end = copy.deepcopy(self.point_b)    # Position d'arrivée du dernier segment
         self.draw_part = []     # Liste brute contenant les dicts géométriques en microns (µm) sans lignes de liaisons
-        #OLD self.profil_piece = None
+
+        #NEW Bbox entourant le shape en microns pour l'affichage du shape sélectioné par exemple !
+        self.shape_bbox_um = [copy.deepcopy(self.point_b), copy.deepcopy(self.point_b)]
+
         self.profil_shape = None    # Variable qui représantera cd.ProfilCanvas(...) après l'initialisation (le Canvas qui dessine le détail)
 
         self.entry = entry_b
@@ -128,6 +131,8 @@ class BaseShape:
             if hasattr(self, 'recompute'):
                 self.recompute()
         return self.shape_start, self.shape_end
+    def get_bbox_shape(self):
+        return self.shape_bbox_um
 
     def get_shape_seg_brut(self) -> list:
         """
@@ -163,7 +168,8 @@ class BaseShape:
             self.profil_shape = cd.ProfilCanvas(
                 box=self.box_draw_shape,
                 B_entities_machine=[],     #  On cadenasse le canal B à vide
-                scale=None                 # IMPORTANT : None active le zoom automatique
+                #scale=None                 # IMPORTANT : None active le zoom automatique
+                scale = 1   # AutoScale avec None ne fonctionne plus avec la nouvelle fonction de zoom_auto_centre et des marge différente de 10%
             ) 
             # A l'ouverture affiche le zoom_auto avec les lignes de liaison (code "A" majuscule).
             self.profil_shape.set_auto_scale_code("A")
@@ -258,7 +264,7 @@ class BaseShape:
         if hasattr(self, "profil_shape") and isinstance(self.profil_shape, cd.ProfilCanvas):
             # La taille du cadre change : on appelle le gros levier pour rescanner la BBox
             # et adapter le zoom auto "Pleine Page". On passe self.box_draw_shape pour la relecture.
-            self.profil_shape.update_entities_auto_scale_auto_center(box_dest=True)
+             self.profil_shape.update_entities_auto_scale_auto_center(box_dest=True)
 
     def on_box_click(self, instance):
         """
@@ -270,11 +276,11 @@ class BaseShape:
             
             if actuel_code == "A":
                 # On bascule sur le code serré "a" et on force le recalcul immédiat via le levier
-                self.profil_shape.update_entities_auto_scale_auto_center(code_entities="a", save_code=True)
+                self.profil_shape.update_entities_auto_scale_auto_center(box_dest=True, code_entities="a", save_code=True)
                 print("[IHM] Switch Zoom Auto : Mode SERRÉ ('a') activé.")
                 debug_color = [0, 0.8, 0.0, 0.5]
             else:
-                self.profil_shape.update_entities_auto_scale_auto_center(code_entities="A", save_code=True)
+                self.profil_shape.update_entities_auto_scale_auto_center(box_dest=True, code_entities="A", save_code=True)
                 print("[IHM] Switch Zoom Auto : Mode GLOBAL ('A') activé.")
                 debug_color = [0.8, 0.0, 0.0, 0.5]
 

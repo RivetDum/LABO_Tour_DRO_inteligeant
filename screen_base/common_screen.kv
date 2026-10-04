@@ -6,160 +6,6 @@
 # =====================================================================
 # 🎛️ LA BARRE DE BOUTONS LATÉRALE UNIFIÉE (Territoire Commande)
 # =====================================================================
-<OLD_BaseScreenToolBar>:
-    orientation: "vertical"
-    size_hint_y: 1
-    size_hint_x: None
-    width: dp(90)
-    
-    # 🎯 CONFIGURATION DU LISERÉ ET DE L'ESPACEMENT
-    padding: 8     # Crée une bordure de 8px tout autour de la barre
-    spacing: 6     # Laisse un fin liseré vert de 6px visible entre chaque bouton
-    
-    canvas.before:
-        Color:
-            rgba: 0.15, 0.25, 0.15, 1  # Vert d'ambiance d'usine (liserés)
-        Rectangle:
-            pos: self.pos
-            size: self.size
-
-    # 🟢 1. MODE USINAGE (Bouton classique push)
-    MenuButton:
-        id: btn_fao
-        text: "DRO"
-        status: 0
-        color: app.navigation_colors["screen_FAO"]
-        on_release: app.changer_ecran("screen_FAO")
-
-    # 🟢 2. OUVERTURE DE L'ÉDITEUR GÉOMÉTRIQUE (Connecté à votre ScreenManager)
-    MenuButton:
-        id: btn_cao
-        text: "CAO"
-        status: 0
-        color: app.navigation_colors["screen_CAO"]
-        on_release: app.changer_ecran("screen_CAO")
-
-    # 🟢 3. CONFIGURATION OUTILS (Bouton classique push)
-    MenuButton:
-        id: btn_tool
-        text: "TOOL"
-        status: 0
-        color: app.navigation_colors["screen_CUTTER"]
-        on_release: app.changer_ecran("screen_CUTTER")
-
-    # 🟢 6. COMPENSATIONS ET DECALAGES (Bouton classique push)
-    MenuButton:
-        id: btn_offset
-        text: "OFFSET"
-        status: 0
-        color: app.navigation_colors["screen_OFFSET"]
-        on_release: app.changer_ecran("screen_OFFSET")
-
-    # 🟢 4. CONFIGURATION MACHINE (Bouton classique push)
-    MenuButton:
-        id: btn_mcu
-        text: "MCU"
-        status: 0
-        color: app.navigation_colors["screen_MCU"]
-        on_release: app.changer_ecran("screen_MCU")
-
-    # 🟢 7. PARAMÈTRES LOGICIEL (Bouton classique push)
-    MenuButton:
-        id: btn_parametres
-        text: "PARAMETRES"
-        status: 0
-        color: app.navigation_colors["screen_PARAM"]
-        on_release: app.changer_ecran("screen_PARAM")
-
-    # 🟢 8. RÉGLAGES TOUR (Bouton classique push)
-    MenuButton:
-        id: btn_reglages
-        text: "RÉGLAGES"
-        status: 0
-        color: app.navigation_colors["screen_SETTING"]
-        on_release: app.changer_ecran("screen_SETTING")
-
-    # 🟡 5. INTERRUPTEUR FORMULAIRES TACTILES (Version Centrale Synchro)
-    MenuButton:
-        id: btn_ui_tactil
-        text: "TACTIL"
-        is_toggle: True  # C'est un Toggle permanent
-        
-        # 🔄 SYNCHRONISATION INDESTRUCTIBLE :
-        # Kivy surveille app.mode_tactile_actif. Si l'application passe à True, 
-        # le bouton de CHAQUE page va se mettre en position enfoncée ("down") tout seul !
-        state: "down" if app.mode_tactile_actif else "normal"
-        
-        # 🎯 L'ACTION DIRECTE : Quand on clique, on pousse la valeur dans la propriété de l'App
-        on_release: app.mode_tactile_actif = (self.state == "down")
-<TO_BTSWITCH_BaseScreenToolBar>:
-    orientation: "vertical"
-    size_hint_y: 1
-    size_hint_x: None
-    width: dp(90)
-    
-    # 🎯 CONFIGURATION DU LISERÉ ET DE L'ESPACEMENT
-    padding: 8     # Crée une bordure de 8px tout autour de la barre
-    spacing: 6     # Laisse un fin liseré vert de 6px visible entre chaque bouton
-    
-    canvas.before:
-        Color:
-            rgba: 0.15, 0.25, 0.15, 1  # Vert d'ambiance d'usine (liserés)
-        Rectangle:
-            pos: self.pos
-            size: self.size
-
-    # 🟢 1. MODE USINAGE (Bouton classique push avec icône)
-    BtnSwitchImageLed:
-        id: btn_fao
-        target_screen: "screen_FAO"
-        on_release: app.changer_ecran("screen_FAO")
-
-    # 🟢 2. OUVERTURE DE L'ÉDITEUR GÉOMÉTRIQUE (Avec icône)
-    BtnSwitchImageLed:
-        id: btn_cao
-        target_screen: "screen_CAO"
-        on_release: app.changer_ecran("screen_CAO")
-
-    # 🟢 3. CONFIGURATION OUTILS (Avec icône)
-    BtnSwitchImageLed:
-        id: btn_tool
-        target_screen: "screen_CUTTER"
-        on_release: app.changer_ecran("screen_CUTTER")
-
-    # 🟢 6. COMPENSATIONS ET DECALAGES (Texte seul)
-    BtnSwitchImageLed:
-        id: btn_offset
-        target_screen: "screen_OFFSET"
-        on_release: app.changer_ecran("screen_OFFSET")
-
-    # 🟢 4. CONFIGURATION MACHINE (Texte seul)
-    BtnSwitchImageLed:
-        id: btn_mcu
-        target_screen: "screen_MCU"
-        on_release: app.changer_ecran("screen_MCU")
-
-    # 🟢 7. PARAMÈTRES LOGICIEL (Texte seul)
-    BtnSwitchImageLed:
-        id: btn_parametres
-        target_screen: "screen_PARAM"
-        on_release: app.changer_ecran("screen_PARAM")
-
-    # 🟢 8. RÉGLAGES TOUR (Texte seul)
-    BtnSwitchImageLed:
-        id: btn_reglages
-        target_screen: "screen_SETTING"
-        on_release: app.changer_ecran("screen_SETTING")
-
-    # 🟡 5. INTERRUPTEUR FORMULAIRES TACTILES (Version Centrale Synchro)
-    BtnSwitchImageLed:
-        id: btn_ui_tactil
-        target_screen: "sw_TACTILE"
-        is_toggle: True  # 🎛️ Manette permanente (Reste enfoncé en relief 3D)
-        
-        # 🔄 SYNCHRONISATION : L'interrupteur s'enfonce tout seul selon l'état de l'App
-        state: "down" if app.mode_tactile_actif else "normal"
-        on_release: app.basculer_mode_tactile()
 <BaseScreenToolBar>:
     orientation: "vertical"
     size_hint_y: 1
@@ -215,10 +61,14 @@
 # =====================================================================
 # 🖥️ 2. LE GABARIT CHÂSSIS UNIVERSEL POUR TOUTES LES PAGES
 # =====================================================================
-<BaseScreenLayout>:
+#<BaseScreenLayout>:
+<BaseMenuScreen>:
+    size_hint_x: 1
+    size_hint_y: 1
     orientation: 'vertical'
     spacing: 0
     padding: 0
+
 
     # 1️⃣ L'ENTÊTE HAUTE (Bandeau d'infos indispensables)
     BoxLayout:
@@ -252,7 +102,21 @@
             spacing: 0
             padding: 0
 
-    # À l'allumage, il fait 0x0 pixel et se cache hors écran.    # 🕵️‍♂️ Le FloatLayout Fantôme (Hauteur 0)
+
+<FullTactileScreenLayout>:
+    orientation: 'vertical'
+    spacing: 0
+    padding: 0
+
+    # 1️⃣ La box àdisposition pour insérer votre page
+    BoxLayout:
+        id: box_zone   
+        size_hint_x: 1
+        size_hint_y: 1
+        orientation: 'vertical'
+        spacing: 0
+        padding: 0
+
 
     FloatLayout:
         size_hint_y: None

@@ -51,7 +51,7 @@ for clé, valeur in draw_line.items():
 
 
 class SmartDroApp(App):
-    MODE_DEVELOPPEMENT_ACTIF = True    # 🛠️ FLAG DE DÉVELOPPEMENT (Passez à False pour masquer le simulateur en atelier)
+    MODE_DEVELOPPEMENT_ACTIF = True   # 🛠️ FLAG DE DÉVELOPPEMENT (Passez à False pour masquer le simulateur en atelier)
 
     icon = "bitmaps/icone.ico"   # str(ICON_PATH)
     title = "DRO intelligent"    # Sera traduit dynamiquement dans build()
@@ -74,8 +74,8 @@ class SmartDroApp(App):
      # ----------------------------------------------------
     # 🛠️ SATUS MATERIEL: MACHINE, OUTIL, ... EN DIRECT(DONNÉES CENTRALES)
     # ----------------------------------------------------
-    # L'offset DRO calculé en temps réel selon le cadran choisi et le rayon de l'outil. [Z(horisontal), X (vertical), icône]
-    dro_visual_offset_cut = ListProperty([0.0, 0.0, "bitmaps/tool_0_centre.png"])
+    # L'offset DRO calculé en temps réel selon le cadran choisi et le rayon de l'outil. [Z(horisontal), X (vertical), Validate, icône]
+    dro_visual_offset_cut = ListProperty([0, 0,False, "bitmaps/tool_offset_0_2.png"])
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -88,7 +88,7 @@ class SmartDroApp(App):
         self.part = PointManager()      # Partagé entre l'IHM DRO et l'Éditeur Dessin !
         self.lib_insert = CutInsertLib()        # Bibliothèque des insertes de burin (Zonne tranchante)
         self.lib_cutter = CutterLib(insert_lib_instance=self.lib_insert)    # Bibliothèque des burins
-        self.cutter_actif = None        #  CutterManager() du burin actuellement utilisé
+        #self.cutter_actif = None        #  CutterManager() du burin actuellement utilisé
 
         # 🟢 V_7.2 : Pré-déclaration des poignées d'écrans pour la clarté de la RAM
         self.dro_manager_instance = None
@@ -110,11 +110,8 @@ class SmartDroApp(App):
         self.sm = ScreenManager()
         
         # Variables partagées pour l'outil de démarrage
-        last_cutter_id = SETTINGS["user_last_select"]["selected_tool_ident"]
-        idx_last = self.lib_cutter.get_index_to_ident(last_cutter_id)
-        if idx_last == -1:
-            idx_last = self.lib_cutter.get_index_to_ident("199")
-        self.cutter_actif = self.lib_cutter.cutters[idx_last]
+        last_cut_ident, last_cut_angle_mont, last_cut_grp = SETTINGS["user_last_select"]["selected_tool"]
+        self.lib_cutter.set_cutter_active(last_cut_ident, last_cut_angle_mont, last_cut_grp)
 
         self.mode_tactile_actif = SETTINGS["user_last_select"]["tactile_keyboard"]
 
@@ -125,7 +122,7 @@ class SmartDroApp(App):
 
         # 1️⃣ ÉCRAN : LE DRO PRINCIPAL (FAO)
         screen_dro = Screen(name="screen_FAO")
-        self.dro_manager_instance = DroManager(self.part, self.cutter_actif, self.machine)
+        self.dro_manager_instance = DroManager(self.part, self.lib_cutter.active_cutter, self.machine)
         screen_dro.add_widget(self.dro_manager_instance)
         screen_dro.on_enter = self.demarrer_horloge_dro
         screen_dro.on_leave = self.stopper_horloge_dro
@@ -133,7 +130,8 @@ class SmartDroApp(App):
 
         # 2️⃣ ÉCRAN : LA PAGE DES OUTILS (TOURELLE / CORRECTEURS ACTIFS)
         screen_outil = Screen(name="screen_CUTTER")
-        self.cutter_page_instance = CutterPageManager(self.cutter_actif)
+        self.cutter_page_instance = CutterPageManager(self.lib_cutter.active_cutter)
+        self.cutter_page_instance.charger_burin_depuis_ident(tool_ident=last_cut_ident, crant_mont= last_cut_angle_mont,grp_ofst= last_cut_grp)
         screen_outil.add_widget(self.cutter_page_instance)
         self.sm.add_widget(screen_outil)
 
@@ -170,6 +168,14 @@ class SmartDroApp(App):
         self.settings_page_instance = SettingsPageManager()
         screen_setting.add_widget(self.settings_page_instance)
         self.sm.add_widget(screen_setting)
+
+        # 8️⃣ 🔵 ÉCRAN PLEIN ÉCRAN GÉNÉRIQUE / NOMADE (Nouveau !)
+        # C'est ta boîte vide interchangeable pour toutes les configurations matérielles lourdes
+        from screen_base.common_screen import FullTactileScreenLayout
+        screen_full_config = Screen(name="screen_FULL_UTILITY")
+        self.full_page_instance = FullTactileScreenLayout()
+        screen_full_config.add_widget(self.full_page_instance)
+        self.sm.add_widget(screen_full_config)
 
         # =====================================================================
         # ASSEMBLAGE DE LA COQUILLE ET LANCEMENT
@@ -210,6 +216,38 @@ class SmartDroApp(App):
         elif nom_ecran == "screen_MCU":     self.mcu_page_instance.screen_focused()
         elif nom_ecran == "screen_PARAM":   self.param_page_instance.screen_focused()            
         elif nom_ecran == "screen_SETTING": self.settings_page_instance.screen_focused()
+
+    def up_to_full_screen(self, instance_widget_formulaire, menu_screen="screen_CUTTER"):
+        """
+        🎯 LE PASSE-PARTOUT TECHNIQUE :
+        Vide le conteneur plein écran, injecte le formulaire tactile demandé,
+        mémorise d'où on vient, et bascule l'affichage sans aucune latence.
+        """
+        # 1. On mémorise l'écran d'origine pour pouvoir y retourner au clic sur "Retour"
+        #self.ecran_retour_session = menu_screen
+        self.full_page_instance.parent_target_screen = menu_screen
+        
+        # 2. Nettoyage absolu de la boîte
+        self.full_page_instance.box_zone.clear_widgets()
+        
+        # 3. Injection du formulaire métrologique frais
+        self.full_page_instance.box_zone.add_widget(instance_widget_formulaire)
+        
+        # 4. Saut visuel immédiat
+        self.sm.current = "screen_FULL_UTILITY"
+
+    def return_menu_screen(self):
+        """ Appelé par le bouton 'Retour / Valider' présent dans ton formulaire plein écran """
+        # On récupère l'écran d'origine mémorisé, ou par défaut le DRO principal
+        #destination = getattr(self, 'ecran_retour_session', "screen_FAO")
+        destination = self.full_page_instance.get('parent_target_screen', "screen_FAO")
+        # On quitte l'écran plein écran pour retourner à l'IHM standard
+        self.sm.current = destination
+        
+        # Optionnel : Nettoyage immédiat de la RAM pour libérer les ressources du dessin
+        self.full_page_instance.box_zone.clear_widgets()
+        self.full_page_instance.parent_target_screen = ""
+
 
     def demarrer_horloge_dro(self):
         if not self.dro_clock:
@@ -255,7 +293,8 @@ class SmartDroApp(App):
             SETTINGS["axis"]["vert"]["last_position_micron"] = int(self.machine.x_machine)
             SETTINGS["axis"]["sup"]["last_position_micron"] = int(self.machine.y_machine)
             SETTINGS["user_last_select"]["tactile_keyboard"] = bool(self.mode_tactile_actif)
-
+            actif_tool = [self.lib_cutter.active_cutter.ident, self.lib_cutter.act_cut_idx_tourelle, self.lib_cutter.act_cut_grp_ofst]
+            SETTINGS["user_last_select"]["selected_tool"] = list(actif_tool)
             # 🚪 PORTE ENTROUVERTE : En commentaire car votre capteur TLE5012B est absolu !
             # SETTINGS["axis"]["s"]["last_position_micron"] = int(self.machine.spindle_machine)
 

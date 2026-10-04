@@ -198,7 +198,7 @@ class ProfilCanvas(Widget):
         #self.trigger_redraw()    # DESSIN : On force Kivy à effacer la toile et à tout repeindre
         self.up_drawing()   # fonction qui lance les màj en fonction de self.timer_update_draw
         
-    def update_entities_auto_scale_auto_center(self, box_dest=None, a_entities=None, b_entities=None, code_entities=None, save_code=True, margin=[0.2, 0.2]):
+    def OLD_update_entities_auto_scale_auto_center(self, box_dest=None, a_entities=None, b_entities=None, code_entities=None, save_code=True, margin=[0.2, 0.2]):
         """ ⚠️ ATTENTION : Ne pas utiliser cette fonction où
                 self.offset_move représente la position réelle des axes de la machine ⚠️
 
@@ -295,6 +295,122 @@ class ProfilCanvas(Widget):
         # On force le précalcul et on réveille le portier de 25ms pour repeindre l'IHM
         self.up_drawing()
         return {"last_offset_move" : last_offset_move, "new_offset_move": self.offset_move}
+    def update_entities_auto_scale_auto_center(self, box_dest=None, a_entities=None, b_entities=None, code_entities=None, save_code=True, margin=[0.2, 0.2]):
+        # Correction du recentrage sur le mouvement de la souris (en px) plutôt que sur les mouvements machine (en um)
+
+        """ ⚠️ ATTENTION : Ne pas utiliser cette fonction où
+                self.offset_move représente la position réelle des axes de la machine ⚠️
+
+        Fonction pour la màj d'affichage auto_centré et zoom_pleine_page, màj des segments et des mouvements-dimenssions de box
+
+        arg:
+            - box_dest : la box de destination pour y mesurer la taille et position
+            - a_entities, b_entities : les listes d'entités à dessiner
+            - code_entities : le code désignant les _entities à utiliser pour les mesures et définit s'il faut supprimer des lignes de connexion dans les calculs
+            - save_code : définit si le code reçu doit remplacer le code par défaut actuel (self.auto_scale_entities_def)
+        """
+
+        last_offset_move = self.offset_move.copy()  # Valeur avant modification, pour le retour
+
+        # =====================================================================
+        # 🧱 1. ENREGISTREMENT ET CHARGEMENT SUR LE BÂTI
+        # =====================================================================
+        if box_dest is not None:
+            if box_dest and isinstance(box_dest, BoxLayout):
+                self.box_dest = box_dest
+            
+        if  hasattr(self.box_dest, 'size') and hasattr(self.box_dest, 'pos'):
+            pos_x = self.box_dest.pos[0]
+            pos_y = self.box_dest.pos[1]
+            box_w = self.box_dest.size[0]
+            box_h = self.box_dest.size[1] 
+            centre_box_x = self.box_dest.center_x
+            centre_box_y = self.box_dest.center_y
+        else:
+            #pos_x = 0
+            #pos_y = 0
+            #box_w = 100
+            #box_h = 100
+            centre_box_x = 50
+            centre_box_y = 50
+        # On force le ratio au centre exact [0.5, 0.5]
+        #base_pixelx = box_w  / 2
+        #base_pixely = box_h / 2
+        #centre_box_x = pos_x + base_pixelx
+        #centre_box_y = pos_y + base_pixely
+        #self.offset_0 = [centre_box_x, centre_box_y]    # On garde [self.offset_screen] pour placer le dessin au centre (sur offset_0)
+
+        marge_box = margin
+        #marge_box = [0.3,0.3]
+        #self.offset_move = [0,0]
+        
+        if a_entities is not None: 
+            self.a_entities = a_entities or []
+            self.recalc_a = True
+            
+        if b_entities is not None: 
+            self.b_entities = b_entities or []
+            self.recalc_b = True
+
+        # =====================================================================
+        # 🎛️ 2. GESTION DYNAMIQUE DU CODES de sélection d'entities
+        # =====================================================================
+        code_recherche = self.auto_scale_entities_def
+        if code_entities and isinstance(code_entities, str):
+            code_recherche = code_entities  # Sélection du code : on prend le code reçu
+            if save_code:    # LOGIQUE d'intention : on sauvegarde comme valeur par défaut
+                self.auto_scale_entities_def = code_entities
+
+        self.auto_scale_entities_last = code_entities   # pour le prochain appel à self._time_auto_draw()
+
+        # =====================================================================
+        # 📐 3. LE SCAN UNIQUE ET L'ALIGNEMENT VECTORIEL
+        # =====================================================================
+        # On passe votre code_recherche validé à l'aiguillage universel
+        bbox_draw = self.search_min_max(code_recherche)  #return (en um): [[Xmin, Ymin], [Xmax, Ymax]] (sans adaptation des miroirs)
+                
+        if bbox_draw:
+            # ÉTAPE A : Calcul de la loupe idéale à partir de la bbox_um
+            nouvelle_echelle = self.compute_scale_from_bbox(bbox_draw, margin=marge_box)
+            if nouvelle_echelle and nouvelle_echelle > 0:
+                self.scale = nouvelle_echelle
+                self.recalc_a = self.recalc_b = True
+            else:
+                print(f"[ERROR-AVERTISSEMENT update_entities_auto_scale_auto_center] nouvelle_echelle : {nouvelle_echelle} (Normal une fois au démarrage!)")
+                return
+
+            # ÉTAPE B : Recentrage géométrique parfait au milieu exact de la box
+            '''NEW_VERSION:'''
+            #Ps: On peut plus prendre les valeurs en Px de bbox_draw car l'échelle à changé !
+            delta_um_x =(bbox_draw[1][0]-bbox_draw[0][0]) #* (1 + marge_box[0] * 2)
+            delta_um_y = (bbox_draw[1][1]-bbox_draw[0][1]) #* (1 + marge_box[1] * 2)
+            new_ofst_um = [bbox_draw[0][0] + delta_um_x /2, bbox_draw[0][1] + delta_um_y /2]
+            # On simule un déplacement à la souris pour centrer le dessin (valeurs en Pixels)
+            #self.offset_screen = [-new_ofst_um[0] * nouvelle_echelle, new_ofst_um[1] * nouvelle_echelle]            
+            self.offset_screen = [-new_ofst_um[0] * self.scale, new_ofst_um[1] * self.scale]        
+            #self.offset_screen = [4771.805555555556, 1218.3333333333333]        
+            self.offset_0 = [
+                centre_box_x + self.offset_screen[0],
+                centre_box_y + self.offset_screen[1]
+            ] 
+        '''# DEBUG <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<    
+            print(f"[DEBUG auto_scale_center] scale: {self.scale}, ofst_um {new_ofst_um}, ofst_Px {self.offset_screen}") 
+            
+            print(f"[DEBUG update_entities_auto_scale_auto_center] box_size: {self.box_dest.size}") 
+            print(f"[DEBUG update_entities_auto_scale_auto_center] box_pos : {self.box_dest.pos}") 
+            print(f"[DEBUG update_entities_auto_scale_auto_center] bbox  : {bbox}") 
+            print(f"[DEBUG update_entities_auto_scale_auto_center] scale : {nouvelle_echelle}") 
+            print(f"[DEBUG update_entities_auto_scale_auto_center] offset: [px] {nouvelle_offset["en_px"]}")
+            print(f"[DEBUG update_entities_auto_scale_auto_center] offset: [um] {self.offset_move}")
+            print(f"[DEBUG >>>> update_entities_auto_scale_auto_center >> a_entities") 
+            print(f"[DEBUG update_entities_auto_scale_auto_center] self.a_entities  : \n{self.a_entities}") 
+            print(f"[DEBUG <<<< update_entities_auto_scale_auto_center <<<< end print") '''
+        # =====================================================================
+        # 🏎️ 4. RÉVEIL DU CADENCEUR ASYNCHRONE
+        # =====================================================================
+        # On force le précalcul et on réveille le portier de 25ms pour repeindre l'IHM
+        self.up_drawing()
+        return {"last_offset_move" : last_offset_move, "new_offset_move": self.offset_move}
 
     def update_offset(self, offset_screen=None, offset_base=None, not_calc_new=False):
         """
@@ -350,7 +466,7 @@ class ProfilCanvas(Widget):
         Reçoit le déplacement en direct des axes en [µm].
         arg:
             - offset_move : C'est les valeurs [profondeur, rayon] en [µm] revoyé par les règles de le tour (chariot inclinable compris)
-            - not_calc_new  : À utiliser uniquement si une autre fonction recalcul et redessinne drtoit derrière
+            - not_calc_new  : À utiliser uniquement si une autre fonction recalcul et redessinne droit derrière
         """
         if offset_move is not None:
             self.offset_move = offset_move
@@ -456,7 +572,7 @@ class ProfilCanvas(Widget):
         max_hor, max_vert = bbox_um[1]
 
         # Application des marges en microns [µm]
-        delta_hor = (max_hor - min_hor) * (1 + margin[0] * 2)
+        delta_hor = (max_hor - min_hor) * (1 + margin[0] * 2)   # Marge en % à appliquer à gauche et à droite
         delta_vert = (max_vert - min_vert) * (1 + margin[1] * 2)
         
         if delta_hor == 0: delta_hor = 1
@@ -507,12 +623,12 @@ class ProfilCanvas(Widget):
         if not isinstance(codesearch, str):
             codesearch = self.auto_scale_entities_def
 
-        bbox_um = self.search_min_max(codesearch)   #retourne labite englobante des entities
+        bbox_um = self.search_min_max(codesearch)   #retourne la boîte englobante des entities
 
         delta_x = (bbox_um[1][0] - bbox_um[0][0]) / 2
         delta_y = (bbox_um[1][1] - bbox_um[0][1]) / 2
         center_um = [bbox_um[0][0] + delta_x, bbox_um[0][1] + delta_y]
-        center_px = [center_um[0] / self.scale , center_um[1] / self.scale]
+        center_px = [center_um[0] * self.scale , center_um[1] * self.scale]
 
         return {"center_um":center_um, "center_px": center_px}
 
@@ -1290,6 +1406,206 @@ class BreakLine(Widget):
 
         return [x, y]
 
+class BboxShowWidget(Widget):
+    ''' (docstring de classe)
+    Widget Kivy permettant de dessiner une ligne en pointillés (ou motif personnalisé)
+    entre deux points, avec mise à jour automatique en cas de redimensionnement.
+
+    Attributs :
+        start (list) : Coordonnées de départ de la ligne [x, y].
+        end (list) : Coordonnées de fin de la ligne [x, y].
+        dash_pattern (list) : Motif de la ligne, sous forme de longueurs (ex: [15, 5] pour un trait de 15px suivi d’un espace de 5px).
+        dash_spacing (float) : Espacement ajouté entre chaque trait du motif.
+        line_width (float) : Épaisseur de la ligne.
+        line_color (list) : Couleur de la ligne (format RGBA).
+
+    Utilisation :
+        - Ajoute ce widget dans un layout.
+        - Modifie dynamiquement les propriétés `start` et `end` pour adapter la ligne à la taille ou à la position d’un autre élément.
+        - Le motif s’adapte automatiquement à la longueur totale.
+
+    Remarque :
+        Si la distance entre les points est insuffisante pour afficher un motif complet,
+        la ligne est centrée et mise à l’échelle pour rester visible de manière cohérente.
+    '''
+    start = ListProperty([-2, -2])
+    end = ListProperty([2, 2])
+    line_width = NumericProperty(dp(10))
+    line_color = ListProperty([0.2, 0.4, 0.2, 1])  # Gris
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self._pos_to_box = [0,0]   #initialisation de la vaviable (màj dans _redraw())
+
+        #self._redraw()
+
+    def on_kv_post(self, base_widget):
+        """
+        🎯 SÉCURITÉ KIVY : Déclenché automatiquement dès que l'IHM et le fichier .kv 
+        sont entièrement chargés et liés. C'est le moment idéal pour le premier dessin.
+        """
+        self._redraw()        
+
+    def _redraw(self, *args):
+        self._pos_to_box = self.get_relative_pos()
+        self._redraw_pos()
+    def drawing_to_possize(self, pos=[0,0], size=[0,0]):
+        self._pos_to_box = pos
+        self.start = [0,0]
+        self.end = size
+        self.line_width = dp(3)
+        self.line_color = [1, 0.2, 0.2, 1]  # Gris
+        self._redraw_pos()
+
+    def redraw_bbox(self, bbox):
+        """
+        🎯 LE COMPAGNON IDÉAL À 60Hz :
+        Met à jour uniquement les points de coordonnées sans toucher au conteneur,
+        puis repeint instantanément la ligne d'axe.
+        """
+        if bbox and len(bbox) == 2:
+            self.start = bbox[0]
+            self.end = bbox[1]
+        else:
+            self.start = []
+            self.end = []
+        self._redraw_pos()
+
+    def _redraw_pos(self):
+        self.canvas.clear()
+
+        if len(self.start) == 2 and len(self.end) == 2:
+            with self.canvas:
+                Color(*self.line_color)
+                Line(rectangle=(self.start[0], self.start[1], self.end[0]-self.start[0], self.end[1]-self.start[1]), width=self.line_width)
+            return
+        else:
+            return
+
+        ##########################################################################################
+        # OLD ################################### OLD ###################################### OLD #            
+        
+        # Récupération des coordonnées réelles à l'écran
+        x1 = self.start[0] + self._pos_to_box[0]
+        y1 = self.start[1] + self._pos_to_box[1]
+        x2 = self.end[0] + self._pos_to_box[0]
+        y2 = self.end[1] + self._pos_to_box[1]
+
+        dx = x2 - x1
+        dy = y2 - y1
+        dist = (dx**2 + dy**2) ** 0.5
+        if dist <= 0:
+            return
+
+        # Vecteurs directeurs unitaires
+        dir_x = dx / dist
+        dir_y = dy / dist
+
+        # Extraction des paramètres
+        long_dash = self.dash_pattern[0]
+        short_dash = self.dash_pattern[1] if len(self.dash_pattern) > 1 else long_dash
+        space = self.dash_spacing
+
+        # Un bloc complet "Trait d'axe" équivaut à : Long + Espace + Court + Espace
+        block_len = long_dash + space + short_dash + space
+
+        # On veut que la ligne commence ET se termine par un trait long (Esthétique industrielle)
+        # Distance restante à combler après le premier et le dernier trait long obligatoire
+        disponibilite = dist - long_dash
+        
+        if disponibilite <= 0:
+            # Si la ligne est plus courte qu'un seul trait long, on dessine une ligne continue
+            with self.canvas:
+                Color(*self.line_color)
+                Line(points=[x1, y1, x2, y2], width=self.line_width)
+            return
+
+        # Calcul du nombre de blocs complets [Espace + Court + Espace + Long] imbriquables
+        nb_blocs = int(disponibilite // block_len)
+        
+        # S'il n'y a pas assez de place pour un bloc complet, on force au moins 1 pour le style
+        if nb_blocs == 0:
+            nb_blocs = 1
+
+        # Calcul du coefficient d'ajustement (scale) pour étirer/ajuster parfaitement le motif à la longueur
+        longueur_theorique = long_dash + (nb_blocs * block_len)
+        scale = dist / longueur_theorique
+
+        # Application du coefficient d'échelle aux dimensions de dessin
+        s_long = long_dash * scale
+        s_short = short_dash * scale
+        s_space = space * scale
+
+        # Initialisation du curseur de parcours de la ligne
+        current_dist = 0
+
+        with self.canvas:
+            Color(*self.line_color)
+
+            # 1. Premier Trait Long
+            x_s = x1 + current_dist * dir_x
+            y_s = y1 + current_dist * dir_y
+            current_dist += s_long
+            x_e = x1 + current_dist * dir_x
+            y_e = y1 + current_dist * dir_y
+            Line(points=[x_s, y_s, x_e, y_e], width=self.line_width)
+
+            # 2. Boucle de répétition des blocs d'alternance
+            for _ in range(nb_blocs):
+                # Saut de l'espace
+                current_dist += s_space
+
+                # Trait Court
+                x_s = x1 + current_dist * dir_x
+                y_s = y1 + current_dist * dir_y
+                current_dist += s_short
+                x_e = x1 + current_dist * dir_x
+                y_e = y1 + current_dist * dir_y
+                Line(points=[x_s, y_s, x_e, y_e], width=self.line_width)
+
+                # Saut de l'espace
+                current_dist += s_space
+
+                # Trait Long
+                x_s = x1 + current_dist * dir_x
+                y_s = y1 + current_dist * dir_y
+                current_dist += s_long
+                x_e = x1 + current_dist * dir_x
+                y_e = y1 + current_dist * dir_y
+                Line(points=[x_s, y_s, x_e, y_e], width=self.line_width)
+
+    def trigger_redraw(self):
+        '''Force explicitement un redessin de ce widget'''
+        self._redraw()
+  
+    def get_relative_pos(self):
+        '''
+        Calcule la position absolue relative d'un widget en sommant sa propre position
+        avec celle de ses parents possédant la méthode `get_relative_pos`.
+
+        Cette méthode permet d'obtenir la position du widget par rapport à un ancêtre
+        spécifique dans la hiérarchie des widgets, en cumulant les positions uniquement
+        des widgets qui implémentent cette méthode.
+
+        Retour:
+            list: Une liste [x, y] représentant la position relative cumulée du widget.
+        
+        Remarques:
+            - Si le parent n'a pas de méthode `get_relative_pos`, la sommation s'arrête.
+            - Utile pour gérer précisément les positions dans des hiérarchies complexes
+            où seuls certains parents doivent être pris en compte.
+        '''
+        x, y = self.pos
+        parent = self.parent
+
+        if parent and hasattr(parent, 'get_relative_pos') and callable(parent.get_relative_pos):
+            px, py = parent.get_relative_pos()
+            x += px
+            y += py
+
+        return [x, y]    
+
 
 # === OUTILS GÉOMÉTRIQUES COMMUNS ===
 
@@ -1620,6 +1936,311 @@ def create_drawing_mesh(arcs_net):
         
     segments_insert.append({"type": "mesh", "vertices": mesh_point})
     return segments_insert
+
+# Ebauche pour trajectoire d'outil
+def OLD_arc_vecteur(point_before, point_intersect, point_after, r_piece, offset_target, r_bec_burin, dict_formated_auto=True):
+    """
+    🖥️ COMPOSANT FAO - GENERATEUR D'ARC-VECTEUR (Version 1.1 - Correction r < 0)
+    Calcule la projection brute et pure d'un sommet, y compris les rayons négatifs.
+    """
+    def cross(a, b):
+        return a[0] * b[1] - a[1] * b[0]
+
+    def normalize_vector(p1, p2):
+        vx, vy = p2[0] - p1[0], p2[1] - p1[1]
+        l = math.hypot(vx, vy)
+        return [vx / l, vy / l] if l > 1e-6 else None
+
+    # 1. Directions originales (Vecteurs unitaires de la liste brute)
+    n_ba = normalize_vector(point_before, point_intersect)
+    n_bc = normalize_vector(point_after, point_intersect)
+
+    if n_ba is None or n_bc is None:
+        return {"arc": None, "v_in": n_ba, "v_out": n_bc, "error": True}
+
+    # 2. Détermination de la concavité d'origine (Profil toujours horaire)
+    is_convex = cross(n_ba, n_bc) > 0  
+    
+    # Valeur totale du décalage (Rayon de bec + surépaisseur)
+    total_offset = r_bec_burin + offset_target
+    
+    # 3. Calcul du rayon théorique exact (sans garde-fou pour l'instant)
+    if is_convex:
+        r_final = r_piece + total_offset
+        cw_final = True
+    else:
+        r_final = r_piece - total_offset
+        cw_final = False
+
+    # 4. Axe médian (Bissectrice normalisée du sommet brut)
+    bis_x = n_ba[0] + n_bc[0]
+    bis_y = n_ba[1] + n_bc[1]
+    l_bis = math.hypot(bis_x, bis_y)
+    
+    if l_bis < 1e-6:
+        return {"arc": None, "v_in": n_ba, "v_out": n_bc, "error": True}
+    n_b_ce = [bis_x / l_bis, bis_y / l_bis]
+
+    # 5. Vecteurs perpendiculaires de tangence (Ce -> Points de tangence)
+    # C'est ici qu'on applique la règle géométrique pure
+    if is_convex:
+        n_ce_a = [-n_ba[1], n_ba[0]]
+        n_ce_c = [n_bc[1], -n_bc[0]]
+    else:
+        n_ce_a = [n_ba[1], -n_ba[0]]
+        n_ce_c = [-n_bc[1], n_bc[0]]
+
+    # Rapport de projection sur la diagonale (Produit scalaire)
+    dot_proj = abs(n_b_ce[0] * n_ce_a[0] + n_b_ce[1] * n_ce_a[1])
+    if dot_proj < 1e-6:
+        return {"arc": None, "v_in": n_ba, "v_out": n_bc, "error": True}
+
+    # 🎯 LA RÉPARATION CHIRURGICALE DU RAYON NÉGATIF :
+    # On utilise la valeur absolue pour la distance géométrique de la bissectrice 'd'
+    # mais le SHT (le signe du rayon) va piloter l'inversion des vecteurs de tangence !
+    d = abs(r_final) / dot_proj
+
+    # Position du Centre théorique (Le centre d'origine de la pièce reste la référence)
+    Ce = [point_intersect[0] + n_b_ce[0] * d, point_intersect[1] + n_b_ce[1] * d]
+
+    # Calcul des vecteurs de rayon (Ce -> Start / Ce -> End)
+    # Si r_final < 0, l'inversion mathématique se fait ici : les points repartent en arrière !
+    v_ce_a = [n_ce_a[0] * r_final, n_ce_a[1] * r_final]
+    v_ce_c = [n_ce_c[0] * r_final, n_ce_c[1] * r_final]
+
+    # Points de tangence bruts déplacés
+    start = [Ce[0] - v_ce_a[0], Ce[1] - v_ce_a[1]]
+    end = [Ce[0] - v_ce_c[0], Ce[1] - v_ce_c[1]]
+
+    def rpt(p, digits=3):
+        return [round(p[0], digits), round(p[1], digits)]
+
+    arc_data = {
+        "type": "a" if dict_formated_auto else "arc",
+        "start": rpt(start),
+        "end": rpt(end),
+        "center": rpt(Ce),
+        "radius": r_final, # Conserve la valeur négative pour informer la fonction 4 points
+        "dir" if dict_formated_auto else "cw": cw_final
+    }
+
+    return {
+        "arc": arc_data,
+        "v_in": n_ba,
+        "v_out": n_bc,
+        "error": False
+    }
+def OLD_raccordement_4_points(p1, p2, p3, p4, r_tool, dict_formated_auto=True):
+    """
+    🖥️ UNIFICATEUR DE PARCOURS MCU (Version 2.2 - Support Rayon 0)
+    Prend 2 segments déjà décalés à leur vraie place (P1->P2 et P3->P4).
+    Calcule le raccordement idéal, accepte r_tool = 0.0 pour les finitions à angle vif.
+    """
+    def cross(a, b):
+        return a[0] * b[1] - a[1] * b[0]
+
+    def normalize(pA, pB):
+        vx, vy = pB[0] - pA[0], pB[1] - pA[1]
+        l = math.hypot(vx, vy)
+        return [vx / l, vy / l] if l > 1e-6 else None
+
+    # 1. Vecteurs directeurs des lignes d'offset réelles
+    u1 = normalize(p1, p2)
+    u2 = normalize(p3, p4)
+
+    if u1 is None or u2 is None:
+        return {"arc": None, "error": True, "msg": "Segment vide"}
+
+    # 2. Recherche de l'intersection virtuelle de nos deux droites décalées
+    # Droite 1: a1*x + b1*y = c1
+    a1, b1 = u1[1], -u1[0]
+    c1 = a1 * p2[0] + b1 * p2[1]
+
+    # Droite 2: a2*x + b2*y = c2
+    a2, b2 = u2[1], -u2[0]
+    c2 = a2 * p3[0] + b2 * p3[1]
+
+    det = a1 * b2 - a2 * b1
+    if abs(det) < 1e-6:
+        return {"arc": None, "error": True, "msg": "Segments parallèles"}
+
+    # Point d'intersection réel des trajectoires du centre de l'outil
+    S_inter = [(c1 * b2 - c2 * b1) / det, (a1 * c2 - a2 * c1) / det]
+
+    # 3. Détermination de la concavité (Profil horaire)
+    is_convex = cross(u1, u2) > 0
+    cw_final = True if is_convex else False
+
+    def rpt(p, digits=3):
+        return [round(p[0], digits), round(p[1], digits)]
+
+    # 🎯 LE CAS MAGIQUE DU RAYON ZÉRO (Finition pure)
+    # Si le rayon demandé est nul, l'arc s'effondre en un point d'angle vif unique
+    if abs(r_tool) < 1e-6:
+        arc_data = {
+            "type": "a" if dict_formated_auto else "arc",
+            "start": rpt(S_inter),
+            "end": rpt(S_inter),
+            "center": rpt(S_inter),
+            "radius": 0.0,
+            "dir" if dict_formated_auto else "cw": cw_final
+        }
+        return arc_data
+
+    # 4. Calcul classique avec bissectrice si r_tool > 0 (Ébauche ou arrondi)
+    v_in = [-u1[0], -u1[1]]
+    v_out = [u2[0], u2[1]]
+
+    bis_x = v_in[0] + v_out[0]
+    bis_y = v_in[1] + v_out[1]
+    l_bis = math.hypot(bis_x, bis_y)
+
+    if l_bis < 1e-6:
+        return {"arc": None, "error": True, "msg": "Segments opposés"}
+
+    n_b_ce = [bis_x / l_bis, bis_y / l_bis]
+
+    if is_convex:
+        n_ce_a = [-u1[1], u1[0]]
+    else:
+        n_ce_a = [u1[1], -u1[0]]
+
+    dot_proj = abs(n_b_ce[0] * n_ce_a[0] + n_b_ce[1] * n_ce_a[1])
+    d_bis = r_tool / dot_proj
+
+    # Position du centre de l'outil
+    Ce = [S_inter[0] + n_b_ce[0] * d_bis, S_inter[1] + n_b_ce[1] * d_bis]
+
+    # Points de tangence réels ajustés
+    if is_convex:
+        start = [Ce[0] + u1[1] * r_tool, Ce[1] - u1[0] * r_tool]
+        end = [Ce[0] + u2[1] * r_tool, Ce[1] - u2[0] * r_tool]
+    else:
+        start = [Ce[0] - u1[1] * r_tool, Ce[1] + u1[0] * r_tool]
+        end = [Ce[0] - u2[1] * r_tool, Ce[1] + u2[0] * r_tool]
+
+    arc_data = {
+        "type": "a" if dict_formated_auto else "arc",
+        "start": rpt(start),
+        "end": rpt(end),
+        "center": rpt(Ce),
+        "radius": round(r_tool, 3),
+        "dir" if dict_formated_auto else "cw": cw_final
+    }
+
+    return arc_data
+
+def calculer_sommet_mcu(point_before, point_intersect, point_after, r_piece, offset_target, r_bec_burin, r_mini_trajectoire=0.0, dict_formated_auto=True):
+    """
+    🖥️ NOYAU FAO UNIFIÉ (Version 3.0 - Sommet Unique)
+    Fusionne la projection brute et le raccordement de sécurité.
+    Prend un sommet brut et retourne l'entité de transition outil parfaite (Arc ou Angle vif).
+    """
+    def cross(a, b):
+        return a[0] * b[1] - a[1] * b[0]
+
+    def normalize_vector(p1, p2):
+        vx, vy = p2[0] - p1[0], p2[1] - p1[1]
+        l = math.hypot(vx, vy)
+        return [vx / l, vy / l] if l > 1e-6 else None
+
+    # 1. Extraction des directions pures de la liste brute
+    n_ba = normalize_vector(point_before, point_intersect)  # Vecteur entrant
+    n_bc = normalize_vector(point_after, point_intersect)   # Vecteur sortant
+
+    if n_ba is None or n_bc is None:
+        return {"type": "L", "end": point_intersect, "error": True}
+
+    # 2. Détermination de la concavité (Profil horaire : cross > 0 Convexe / cross < 0 Concave)
+    is_convex = cross(n_ba, n_bc) > 0  
+    
+    # Équation d'offset brute (Rayon outil + Surépaisseur d'usinage)
+    total_offset = r_bec_burin + offset_target
+    
+    if is_convex:
+        r_final = r_piece + total_offset
+        cw_final = True
+    else:
+        r_final = r_piece - total_offset
+        cw_final = False
+
+    # 3. Axe médian du sommet (Bissectrice normalisée)
+    bis_x = n_ba[0] + n_bc[0]
+    bis_y = n_ba[1] + n_bc[1]
+    l_bis = math.hypot(bis_x, bis_y)
+    
+    if l_bis < 1e-6:
+        return {"type": "L", "end": point_intersect, "error": True}
+    n_b_ce = [bis_x / l_bis, bis_y / l_bis]
+
+    # 4. Vecteurs normaux de tangence (Ce -> Profil)
+    if is_convex:
+        n_ce_a = [-n_ba[1], n_ba[0]]
+        n_ce_c = [n_bc[1], -n_bc[0]]
+    else:
+        n_ce_a = [n_ba[1], -n_ba[0]]
+        n_ce_c = [-n_bc[1], n_bc[0]]
+
+    # Rapport de projection sur la diagonale (Produit scalaire)
+    dot_proj = abs(n_b_ce[0] * n_ce_a[0] + n_b_ce[1] * n_ce_a[1])
+    if dot_proj < 1e-6:
+        return {"type": "L", "end": point_intersect, "error": True}
+
+    # 🎯 LE FILTRE UNIFIÉ D'ATELIER (Gestion r < r_mini ou négatif)
+    # r_mini_trajectoire peut être configuré à 0.0 pour les finitions à angles vifs
+    if r_final < r_mini_trajectoire:
+        r_final = max(0.0, r_mini_trajectoire)
+        cw_final = True if is_convex else False  # Conserve son sens machine initial
+
+    def rpt(p, digits=3):
+        return [round(p[0], digits), round(p[1], digits)]
+
+    # 🎯 CAS MAGIQUE : ANGLE VIF POUR LES MOTEURS (Finition pure à 0 µm)
+    if r_final < 1e-6:
+        # Si le rayon de trajectoire est nul, toutes les lignes de centres convergent.
+        # Le point d'intersection réel de tes droites décalées se calcule via la bissectrice à d=0
+        # par rapport aux parallèles théoriques. Plus simplement : c'est le point d'angle vif décalé.
+        # Pour le trouver sans faire de système linéaire, on utilise la projection de l'offset total sur la bissectrice :
+        d_vif = total_offset / dot_proj
+        if not is_convex:
+            S_inter = [point_intersect[0] - n_b_ce[0] * d_vif, point_intersect[1] - n_b_ce[1] * d_vif]
+        else:
+            S_inter = [point_intersect[0] + n_b_ce[0] * d_vif, point_intersect[1] + n_b_ce[1] * d_vif]
+
+        return {
+            "type": "a" if dict_formated_auto else "arc",
+            "start": rpt(S_inter),
+            "end": rpt(S_inter),
+            "center": rpt(S_inter),
+            "radius": 0.0,
+            "dir" if dict_formated_auto else "cw": cw_final,
+            "v_out": n_bc
+        }
+
+    # 5. CAS CLASSIQUE : CALCUL DE L'ARC DE RAYON R > 0 (Ébauche ou congés préservés)
+    d = abs(r_final) / dot_proj
+
+    # Positionnement géométrique du centre outil
+    # Si le rayon brut était négatif, l'outil s'est inversé, le centre s'ajuste
+    if not is_convex:
+        Ce = [point_intersect[0] - n_b_ce[0] * d, point_intersect[1] - n_b_ce[1] * d]
+    else:
+        Ce = [point_intersect[0] + n_b_ce[0] * d, point_intersect[1] + n_b_ce[1] * d]
+
+    # Calcul des points de tangence réels (Trim automatique)
+    start = [Ce[0] - n_ce_a[0] * r_final, Ce[1] - n_ce_a[1] * r_final]
+    end = [Ce[0] - n_ce_c[0] * r_final, Ce[1] - n_ce_c[1] * r_final]
+
+    return {
+        "type": "a" if dict_formated_auto else "arc",
+        "start": rpt(start),
+        "end": rpt(end),
+        "center": rpt(Ce),
+        "radius": round(abs(r_final), 3),
+        "dir" if dict_formated_auto else "cw": cw_final,
+        "v_out": n_bc  # On exporte le vecteur sortant pour la fonction globale de chaînage
+    }
+
 
 # Mise en forme des segments pour ProfilCanvas()
 def re_paint_entities(raw_list, draw_type="profil", liaison_line=None, liaison_color=None):

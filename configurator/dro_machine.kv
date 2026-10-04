@@ -30,20 +30,6 @@
             pos: self.pos
             size: self.size
       
-    BoxLayout:    # Ligne 2 Division par colonne
-        orientation: 'horizontal'
-        size_hint: (1, 1)
-        padding: 0
-        
-        Label:
-            text: "Uitilsation des mémoires \tet \tdu palpeur:"
-            bold: False
-            font_size: '12sp'
-            size_hint_x: None
-            width: self.texture_size[0]
-            valign: 'middle'
-            text_size: None, self.height
-    
     BoxLayout:    # Ligne 1 Division par colonne
         orientation: 'horizontal'
         size_hint: (1, 1)
@@ -63,6 +49,10 @@
                 width: self.texture_size[0]
                 valign: 'middle'
                 text_size: None, self.height
+            
+            TextInput:
+                #text: f"{root.axe_y_angle[0]}"
+
 
             Label:
                 text: "(Homin r) si utilisé ! :"
@@ -138,6 +128,20 @@
 
             Widget:
                 size_hint_y: 1 
+    
+    BoxLayout:    # Ligne 2 Division par colonne
+        orientation: 'horizontal'
+        size_hint: (1, 1)
+        padding: 0
+        
+        Label:
+            text: "Uitilsation des mémoires \tet \tdu palpeur:"
+            bold: False
+            font_size: '12sp'
+            size_hint_x: None
+            width: self.texture_size[0]
+            valign: 'middle'
+            text_size: None, self.height
     
     BoxLayout:    # Ligne 3 Division par colonne
         orientation: 'horizontal'

@@ -302,9 +302,9 @@ class ThreadReliefISOShape(BaseShape):
             self.draw_part.append({"type":"l", "start":pnt1, "end":pnt2})
             self.draw_part.append(conge_ent)
             self.draw_part.append({"type":"d", "start":conge_ent["end"], "end":pnt3, "vec_dir":[pnt3[0]-pnt2[0],pnt3[1]-pnt2[1]]})
-            entities = [{"type":"l", "start":self.point_c, "end":ref_abs}]
+            entities = [{"type":"l", "start":self.point_a, "end":ref_abs}]
             entities.extend(self.draw_part)
-            entities.append({"type":"l", "start":pnt3, "end":self.point_a})
+            entities.append({"type":"l", "start":pnt3, "end":self.point_c})
         else:
             conge_ent = cd.create_fillet(point_before=pnt3, point_intersect=pnt2, point_after=pnt1, radius=radius, dict_formated_auto=True)
             conge_sort = cd.create_fillet(point_before=pnt2, point_intersect=pnt1, point_after=ref_abs, radius=radius, dict_formated_auto=True)
@@ -326,6 +326,15 @@ class ThreadReliefISOShape(BaseShape):
         
         self.shape_start = self.draw_part[0]["start"]
         self.shape_end   = self.draw_part[-1]["end"]
+
+        min_x = max_x = entities_shape[1]["bbox"][0][0]
+        min_y = max_y = entities_shape[1]["bbox"][0][1]
+        for index, segm in enumerate(entities_shape[1:len(entities_shape)-1]):
+            min_x = min(min_x, segm["bbox"][0][0])
+            min_y = min(min_y, segm["bbox"][0][1])
+            max_x = max(max_x, segm["bbox"][1][0])
+            max_y = max(max_y, segm["bbox"][1][1])
+        self.shape_bbox_um = [[min_x, min_y], [max_x, max_y]]
         # Mettre à jour le dessin du détail
         self.update_draw_shape(entities_détail)
 

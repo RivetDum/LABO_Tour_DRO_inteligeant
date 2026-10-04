@@ -194,7 +194,6 @@ class ChamferShape(BaseShape):
 
         # Donné brut
         self.draw_part= [{"type": "d", "start": point_aa, "end": point_cc, "vec_dir":[0,0]}] 
-        self.shape_start, self.shape_end = point_aa, point_cc
         entities = [
             {"type": "l", "start": self.pntA,   "end": self.point_b},
             {"type": "d", "start": point_aa,    "end": point_cc, "vec_dir":[0,0]},
@@ -202,7 +201,10 @@ class ChamferShape(BaseShape):
         ]
         # donnés formatés pour dessin
         self.entities_shape = re_paint_entities(create_entities_from_raw(entities),"detail", 1)
-        
+
+        self.shape_start, self.shape_end = point_aa, point_cc  
+        self.shape_bbox_um = self.entities_shape[1]["bbox"]
+
         # Mettre à jour le dessin du détail
 
         #print(f"[DEBUG ChamferShape-Compute_geometry] self.entities_shape  : {self.entities_shape}")

@@ -26,6 +26,7 @@
             size_hint_x: 0.7
             font_size: "32sp"
             halign: "right"         # alignement horizontal
+            valign: "bottom"
             bg_color: 1, 1, 1, 0.0
             hover_color: 0.3, 1, 0.3, 0.3
             #on_release: app.open_axis_homing(root)
@@ -52,18 +53,19 @@
                 Label:  # diamètre
                     text: " Ø" # if root.val_diam else "r "
                     halign: "center"
-                    valign: "middle"
+                    valign: "bottom" #"top" "middle"
                     text_size: self.size
-                    font_size: "16sp"
+                    font_size: "14sp"
                     #color: (1, 1, 1, 1) if root.val_diam else (1, 1, 1, 0.4)
                     color: (0, 1, 0, 1) if root.val_diam else (1, 1, 1, 0.3)
                     size_hint_x: 1
 
             MyLabel:  # unité
                 text: root.val_unit
+                size_hint_y: 0.6
                 font_size: "14sp"
                 halign: "left"
-                valign: "middle"
+                valign: "middle" #"bottom" "top"
 
 <AxisYplus>:
     BoxLayout:
@@ -115,22 +117,23 @@
         axe_ident: "hor3"
     AxisBox:    # Y
         id: header_sup
-        axe_ident: "s"
+        axe_ident: "test"
 
 <DroDro>:
     orientation: "horizontal"
     spacing: 1
     size_hint_y: None
-    height: dp(205)
+    height: dp(220)
 
     # Gauche : axes
     BoxLayout:
         id: dro_dim
         orientation: "vertical"
         size_hint_y: 1
+        #height: 500
         size_hint_x: 0.7
         padding: [0,0,0,dp(7)]
-        spacing: 10
+        spacing: 6
         canvas.before:
             Color:
                 #rgba: 1, 0.1, 0.3, 0.4
@@ -144,7 +147,7 @@
             orientation: "horizontal"
             size_hint_x: 1
             size_hint_y: None
-            height: dp(60)
+            height: dp(50)
             spacing: 20
             padding: [20, 5] # → marge horizontale / verticale
 
@@ -159,33 +162,54 @@
                 axe_ident: "hor"
                 size_hint_x: 1
 
-        BoxLayout:
+        BoxLayout:    # Y + complément
             id: dro_axes_l2
             orientation: "horizontal"
             size_hint_y: None
-            height: dp(58)
+            height: dp(50)
             size_hint_x: 1
-            spacing: 0
+            spacing: 20
             padding: [20, 5] # → marge horizontale / verticale
-
-            BoxLayout:
-                size_hint_y: 0.2
 
             AxisBox:    # Y + complément
                 id: dro_y
                 axe_ident: "sup"
                 special: "Yplus"
                 size_hint_x: 1
+                spacing: 20
 
-            BoxLayout:
-                size_hint_y: 0.2
+                BoxLayout:
+                    orientation: "horizontal"
+                    size_hint_y: 1
+                    size_hint_x: 1
+                    BoxLayout:
+                        orientation: "vertical"
+                        size_hint_y: 1
+                        size_hint_x: 1
+                        Label:
+                            text: "Angle"
+                            size_hint_x: 1
+                            text_size: self.size
+                            halign: "left"
+                        Label:
+                            text: "Course"
+                            size_hint_x: 1
+                            text_size: self.size
+                            halign: "left"  #"right"
+                        Label:
+                            text: "vitesse"
+                    BoxLayout:
+                        orientation: "vertical"
+                        size_hint_y: 1
+                        size_hint_x: 1
+                        Label:
+                            text: "MODE :"
 
-
-        BoxLayout:
+        BoxLayout:    # S + complément
             id: dro_axes_l3
             orientation: "horizontal"
             size_hint_y: None
-            height: dp(60)
+            height: dp(50)
             size_hint_x: 1
             spacing: 20
             padding: [20, 5] # → marge horizontale / verticale
@@ -195,11 +219,64 @@
                 axe_ident: "s"
                 #special: "Splus"
                 size_hint_x: 1
+                spacing: 20
+
+                BoxLayout:
+                    orientation: "horizontal"
+                    size_hint_y: 1
+                    size_hint_x: 1
+                    BoxLayout:
+                        orientation: "vertical"
+                        size_hint_y: 1
+                        size_hint_x: 1
+                        Label:
+                            text: "Matière: ..."
+                            size_hint_x: 1
+                            text_size: self.size
+                            halign: "left"
+                        Label:
+                            text: "vitesse de coupe: ..."
+                            size_hint_x: 1
+                            text_size: self.size
+                            halign: "left"  #"right"
+                    BoxLayout:
+                        orientation: "vertical"
+                        size_hint_y: 1
+                        size_hint_x: 1
+
+        BoxLayout:    # r (complément à voir ?)
+            id: dro_axes_l4
+            orientation: "horizontal"
+            size_hint_y: None
+            height: dp(50)
+            size_hint_x: 1
+            spacing: 20
+            padding: [20, 5] # → marge horizontale / verticale
 
             AxisBox:    # r (complément à voir ?)
                 id: dro_r
                 axe_ident: "r"
                 size_hint_x: 1
+                spacing: 20
+
+                BoxLayout:
+                    size_hint_x: 1.0
+                    canvas.before:
+                        Color:
+                            rgba: 0.2, 0.1, 0.1, 0.5
+                        Rectangle:
+                            pos: self.pos
+                            size: self.width*0.8, self.height
+
+                    Label:
+                        text: "A FAIRE"
+                        size_hint_x: 1
+                        font_size: "18sp"
+                        bold: True
+                        color: 0,0,0,1
+                        halign: 'center'      # Centre le texte horizontalement
+                        valign: 'middle'      # Centre le texte verticalement
+                        text_size: self.size  # 🚀 OBLIGATOIRE pour activer le multiligne !
 
     # Droite : informations diverses
     BoxLayout:
@@ -240,12 +317,55 @@
     size_hint: (1, 1)
 
     FloatLayout:
-        id: zone_globale          # 🎯 ID ajouté pour l'accès Python
+        id: zone_globale          #ID ajouté pour l'accès Python
         size_hint: (1, 1)
 
-        # (L'axe sera injecté ici via Python, tout en bas de la pile)
+        #---------------------
+
+        # Copy de box_calcul-gauche en sous-couche (pour affichage d'info suplémentaires)
+        BoxLayout:
+            size_hint: None, None
+            size: box_calcul_gauche.size
+            pos: box_calcul_gauche.pos
+            padding: 2
+            orientation: 'vertical'
+
+            BoxLayout:
+                size_hint: 1, None
+                #size: self.parent.size
+                #pos: self.parent.pos
+                padding: 2
+                orientation: 'horizontal'
+
+                #canvas.before:
+                #    Color:
+                #        rgba: 0.5, 0.2, 0.3, 1
+                #    Rectangle:
+                #        pos: self.pos
+                #        size: self.size
+
+                Label:
+                    text: "Réf tool: "
+                    halign: "center"
+                    valign: "top"
+                    text_size: self.size
+                    font_size: "14sp"
+                    color: (1, 1, 1, 0.6)
+                    size_hint: None,1
+
+                Image:
+                    source: root.offset_tool_image
+                    size_hint: None, None
+                    size: [dp(48),dp(48)]
+                    #opacity: 1 if (root.target_screen and getattr(app, root.target_screen)["icon"]) else 0
+                    allow_stretch: True
+
+            Widget:
+                size_hint_y: 1
+        #---------------------------
 
         # 🛡️ SOUS-COUCHE A : Dessins (100% de l'écran)
+        # (L'axe sera injecté ici via Python, tout en bas de la pile)
         StencilView:
             id: zone_decoupe
             size_hint: (1, 1)
@@ -263,52 +383,6 @@
                 size_hint_x: 0.85
                 size_hint_y: 1
                 
-                #---------------------
-                FloatLayout:
-                    size_hint_y: None
-                    height: 0
-
-                    # Copy de box_calcul-gauche superposée (pour affichage d'info suplémentaires)
-                    BoxLayout:
-                        size_hint: None, None
-                        size: self.parent.size
-                        pos: self.parent.pos
-                        padding: 2
-                        orientation: 'vertical'
-
-                        canvas.before:
-                            Color:
-                                rgba: 0.5, 0.2, 0.3, 1
-                            Rectangle:
-                                pos: self.pos
-                                size: self.size
-
-                        BoxLayout:
-                            size_hint: 1, None
-                            size: self.parent.size
-                            pos: self.parent.pos
-                            padding: 2
-                            orientation: 'horizontal'
-
-                            Label:
-                                text: "Réf tool: "
-                                halign: "center"
-                                valign: "top"
-                                text_size: self.size
-                                font_size: "14sp"
-                                color: (1, 1, 1, 0.6)
-                                size_hint: None,1
-
-                            Image:
-                                source: root.offset_tool_image
-                                size_hint: None, None
-                                size: [dp(48),dp(48)]
-                                #opacity: 1 if (root.target_screen and getattr(app, root.target_screen)["icon"]) else 0
-                                allow_stretch: True
-
-                        Widget:
-                            size_hint_y: 1
-            #---------------------------
 
             # 🎛️ CASE DROITE (25%) : Le panneau fumé
             BoxLayout:
@@ -320,7 +394,7 @@
                 spacing: 15
                 canvas.before:
                     Color:
-                        rgba: 0.05, 0.05, 0.1, 0.75
+                        rgba: 0.05, 0.05, 0.1, 0.55
                     Rectangle:
                         pos: self.pos
                         size: self.size

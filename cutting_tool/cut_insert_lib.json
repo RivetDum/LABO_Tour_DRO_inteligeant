@@ -1,23 +1,68 @@
 {
     "cutt_profile": {
         "1": {
-            "name": "CCMT09",
-            "desc": "Plaquette ébauche losange 80°",
-            "points": [
-                [0.0, 0.0, 400.0],
-                [9525.0, 0.0, 400.0],
-                [11177.0, 9380.0, 400.0],
-                [1652.0, 9380.0, 400.0]
-            ],
+            "name": "CCMT 09T304",
+            "desc": "Plaquette ébauche losange 80° r: 0.4",
+            "normed": {
+                "systeme": "ISO_TURNING",
+                "code": "CCMT09T304",
+                "not_customed_geometry": true,
+                "pdf_associe": "docs/cutter/iso_turning_table.pdf"
+            },
+            "points": [[0.0, 0.0, 400.0], [9525.0, 0.0, 400.0], [11177.0, 9380.0, 400.0], [1652.0, 9380.0, 400.0]],
             "offset_mount": [-400.0, -400.0]
         },
         "2": {
-            "name": "Plaquette Ronde R6350",
-            "desc": "Insert rond ISO R06",
-            "points": [
-                [0.0, 0.0, 3175.0]
-            ],
+            "name": "IFANGER KGL 2 (Modifié)",
+            "desc": "Burin de côté réaffûté avec dépouille spéciale d'atelier",
+            "normed": {
+                "systeme": "IFANGER",
+                "code": "KGL_2",
+                "not_customed_geometry": false,
+                "pdf_associe": "docs/cutter/ifanger_kgl.pdf"
+            },
+            "points": [[0.0, 0.0, 200.0], [8000.0, 0.0, 200.0], [5500.0, 6800.0, 0.0]],
             "offset_mount": [0.0, 0.0]
+        },
+        "3": {
+            "name": "Outil à tronçonner DIN 4961",
+            "desc": "Burin carbure brasé pour gorge",
+            "normed": {
+                "systeme": "DIN_STANDARDS",
+                "code": "DIN_4961",
+                "not_customed_geometry": true,
+                "pdf_associe": null
+            },
+            "points": [[0.0, 0.0, 100.0], [3000.0, 0.0, 0.0], [3000.0, 4000.0, 0.0], [0.0, 4000.0, 100.0]],
+            "offset_mount": [0.0, 0.0]
+        },
+        "4": {
+            "name": "Plaquette Ébauche Maison",
+            "desc": "Meulée à la volée sur une vieille plaquette cassée",
+            "normed": {
+                "systeme": "NOT_NORMED",
+                "code": "AFFUTAGE_MAIN",
+                "not_customed_geometry": false,
+                "pdf_associe": null
+            },
+            "points": [[0.0, 0.0, 50.0], [3000.0, -2000.0, 0.0], [3000.0, 2000.0, 0.0]],
+            "offset_mount": [0.0, 0.0]
+        },
+        "5": {
+            "name": "CCMT 09T308",
+            "desc": "Plaquette ébauche losange 80° r: 0.8",
+            "normed": {
+                "systeme": "ISO_TURNING",
+                "code": "CCMT09T308",
+                "not_customed_geometry": true,
+                "pdf_associe": "docs/cutter/iso_turning_table.pdf"
+            },
+            "points": [[0.0, 0.0, 800.0], [9525.0, 0.0, 800.0], [11177.0, 9380.0, 800.0], [1652.0, 9380.0, 800.0]],
+            "offset_mount": [-800.0, -800.0]
         }
+    },
+    "cutt_normes": {
+        "ISO_TURNING": {"class_ptr": "IsoInserteCreator"},
+        "NOT_NORMED": {"class_ptr": null}
     }
 }

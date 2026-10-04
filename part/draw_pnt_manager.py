@@ -172,183 +172,7 @@ class JsonPartStorage(JsonPointStorage):
             self.save_data(data)
         else:
             print(f"ID de pièce invalide : {part_id}")
-'''
-class OBSOLETTE_JsonCuttingToolStorage(JsonPointStorage):
-    MAX_ID_CUTT_TOOL = 100
-    def __init__(self):
-        self.path = DATA_FILE_TOOL
-        super().__init__()
-        self.cutt_id_actif = 0
-        self.cutt_json_loaded = {}
-        self.cutt_name = []
 
-        self.last_new_id_cutt_tool = -1 # Identifiant du dernier burin ajouté 
-
-        self.load_designator()
-
-    def _ensure_file_exists(self):
-        if not os.path.exists(self.path):
-            data = {
-                "cutt_profile": {},
-                "cutt_tool": {},
-                "selected_tool_index": 0
-            }
-            self.save_data(data)
-            print(f"Initialisation de {self.path} avec une structure vide.")
-
-    def make_default_cutting_tool(self, tool_id=0, cadran=4):
-        cutter_val = self.draw_cadran_default(cadran)
-        return {
-            "id_cutt": tool_id, # Identifiant unique
-            "p_change": False,  # Si l'outil est concidéré comme calibré (positions prettent à l'emplois)
-            "tool_mount": None,    # Identifiant du porte outil
-            "form": 11,         # Identifiant de la plaquette actuelement montée sur l'outil
-            "cadran": cadran,        # Direction du tranchant (par demi-cadran)
-            "dir_pos": cutter_val["dir_cutt_profile"],  # Direction de montage de la plaquette
-            "draw": cutter_val["pnt_draw"],             # dessin de burin avec [0,0]= point 0,0 de la plaquette = point de coupe
-            "probe_x": 0,       # Offset de palpage en X
-            "probe_z": 0,       # Offset de palpage en Z
-            "corr_x": [0, 0],   # Coorection de l'outil en X : [coorection standart (rémanante), coorection fine (temporaire)]
-            "corr_z": [0, 0]    # Coorection de l'outil en Z : [coorection standart (rémanante), coorection fine (temporaire)]
-        }
-    
-    def draw_cadran_default(self, cadran):
-        cutter_val_def = {}
-        
-        if cadran == 1:   # burin pour usinage de la porté intérieur et face. (direction opérateur/broche)
-            cutter_val_def["pnt_draw"]= [[0,0],[100,100],[100,16000],[1700,16000],[1700,100]]
-            cutter_val_def["dir_cutt_profile"]= [10,10]
-        elif cadran == 4:   # burin pour usinage de la porté et face. (direction axe/broche)
-            cutter_val_def["pnt_draw"]= [[0,0],[-100,-100],[-16000,-100],[-16000,-1700],[-100,-1700]]
-            cutter_val_def["dir_cutt_profile"]= [-10,10]
-        elif cadran == 3.5:   # burin pour usinage de la porté . (direction axe de rotation)
-            cutter_val_def["pnt_draw"]= [[0,0],[-800,-800],[-800,-16000],[800,-16000],[800,-800]]
-            cutter_val_def["dir_cutt_profile"]= [-10,0]
-            #cutter_val_def["icon"]= ...
-        elif cadran == 1.5:   # burin pour usinage de la porté intérieur. (direction opérateur)
-            cutter_val_def["pnt_draw"]= [[0,0],[-800,-800],[-800,-16000],[800,-16000],[800,-800]]
-            cutter_val_def["dir_cutt_profile"]= [-10,0]
-        elif cadran == 2:   # burin pour usinage de la porté intérieur et face invercé. (direction opérateur/contre pointe)
-            cutter_val_def["pnt_draw"]= [[0,0],[100,-100],[100,16000],[1700,16000],[1700,-1000],[100,-1000]]
-            cutter_val_def["dir_cutt_profile"]= [10,-10]
-        elif cadran == 2.5:   # burin pour usinage de la face inverce. (direction contre-pointe)
-            cutter_val_def["pnt_draw"]= [[0,0],[-800,-800],[-800,-16000],[800,-16000],[800,-800]]
-            cutter_val_def["dir_cutt_profile"]= [0,-10]
-        elif cadran == 3:   # burin pour usinage de la porté et face inverce. (direction axe/contre-pointe)
-            cutter_val_def["pnt_draw"]= [[0,0],[-100,100],[-16000,100],[-16000,1700],[-100,1700]]
-            cutter_val_def["dir_cutt_profile"]= [-10,10]
-        elif cadran == 4.5:   # burin pour usinage de la face. (direction mandrin)
-            cutter_val_def["pnt_draw"]= [[0,0],[-800,800],[-800,16000],[800,16000],[800,800]]
-            cutter_val_def["dir_cutt_profile"]= [0,10]
-        else:
-            cutter_val_def["pnt_draw"] = [[0, 0]]
-            cutter_val_def["dir_cutt_profile"] = [0, 0]
-            print(f"[Avertissement] Cadran inconnu : {cadran}")
-
-        return cutter_val_def
-
-    def load_data(self):
-        with open(self.path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-
-    def save_data(self, data):
-        save_json_with_format(self.path, data, indent=4)
-        cutt_tool = data.get("cutt_tool", {})
-        if str(self.cutt_id_actif) in cutt_tool:
-            self.cutt_json_loaded = copy.deepcopy(cutt_tool[str(self.cutt_id_actif)])
-        else:
-            self.cutt_json_loaded = {}
-
-    def load_designator(self):
-        data = self.load_data()
-        cutt_tool = data.get("cutt_tool", {})
-        self.cutt_id_actif = data.get("selected_tool_index", 0)
-        self.cutt_name = []
-
-        for k in sorted(cutt_tool.keys(), key=lambda x: int(x)):
-            tool = cutt_tool[k]
-            name = tool.get("nom", f"Cutting Tool {k}")
-            self.cutt_name.append(name)
-
-        if str(self.cutt_id_actif) in cutt_tool:
-            self.cutt_json_loaded = copy.deepcopy(cutt_tool[str(self.cutt_id_actif)])
-        else:
-            self.cutt_json_loaded = {}
-
-    def save_designator(self):
-        data = self.load_data()
-        data["selected_tool_index"] = self.cutt_id_actif
-
-        cutt_tool = data.get("cutt_tool", {})
-        for i, k in enumerate(sorted(cutt_tool.keys(), key=lambda x: int(x))):
-            if i < len(self.cutt_name):
-                cutt_tool[k]["nom"] = self.cutt_name[i]
-
-        self.save_data(data)
-
-    def set_selected_index(self, tool_id):
-        data = self.load_data()
-        if str(tool_id) in data.get("cutt_tool", {}):
-            self.cutt_id_actif = int(tool_id)
-            self.save_designator()
-        else:
-            print(f"[Erreur] ID d'outil invalide : {tool_id}")
-
-    def get_selected_cutting_tool(self):
-        data = self.load_data()
-        return data.get("cutt_tool", {}).get(str(self.cutt_id_actif))
-
-    def load_selected_cutting_tool(self):
-        tool = self.get_selected_cutting_tool()
-        if tool:
-            self.cutt_json_loaded = copy.deepcopy(tool)
-        else:
-            self.cutt_json_loaded = {}
-        return self.cutt_json_loaded
-
-    def get_cutting_tool_profile(self, form_id=None):
-        data = self.load_data()
-        profiles = data.get("cutt_profile", {})
-        tool = self.cutt_json_loaded or self.get_selected_cutting_tool()
-        form = tool.get("form") if form_id is None else form_id
-        return profiles.get(str(form), None)
-
-    def reset_cutting_tool(self, tool_id=None):
-        tool_id = self.cutt_id_actif if tool_id is None else tool_id
-        data = self.load_data()
-        data["cutt_tool"][str(tool_id)] = self.make_default_cutting_tool(tool_id)
-        self.save_data(data)
-        self.load_designator()
-
-
-    def add_cutting_tool(self):
-        data = self.load_data()
-        cutt_tool = data.get("cutt_tool", {})
-
-        start_id = self.last_new_id_cutt_tool + 1
-        for i in range(self.MAX_ID_CUTT_TOOL):
-            candidate_id = (start_id + i) % self.MAX_ID_CUTT_TOOL
-            if str(candidate_id) not in cutt_tool:
-                # ID disponible, on crée l’outil
-                new_tool = self.make_default_cutting_tool(candidate_id)
-                cutt_tool[str(candidate_id)] = new_tool
-
-                data["cutt_tool"] = cutt_tool
-                self.last_new_id_cutt_tool = candidate_id
-                self.cutt_id_actif = candidate_id  # sélectionne le nouveau
-                self.save_data(data)
-                self.load_designator()
-                print(f"[Info] Outil #{candidate_id} ajouté.")
-                return
-
-        print(f"[Erreur] Bibliothèque d'outils complète. Maximum atteint ({self.MAX_ID_CUTT_TOOL}).")
-
-    def set_selected_cutting_tool(self, tool_data, tool_id=None):
-        tool_id = self.cutt_id_actif if tool_id is None else tool_id
-        data = self.load_data()
-        data["cutt_tool"][str(tool_id)] = tool_data
-        self.save_data(data)
-'''
 
 UnitSpec = namedtuple("UnitSpec", ["type", "unit_id"])    # Pour PointData et ColumnDefaultSpec
 class ColumnDefaultSpec:
@@ -675,6 +499,7 @@ class PointEntry:
 
         # 🚀 AJOUT DE LA COUCHE GÉOMÉTRIQUE CAO
         self.raw_shape_segments = []  # Liste des dict bruts {"type": "m"/"r"/"a"..."id_pnt": self.id_pnt} généré par le shape
+        self.bbox_um_editing = [copy.deepcopy(raw["pos"]),copy.deepcopy(raw["pos"])]    # bbox du shape
         self.modified_shape = True    # Flag dirty spécifique pour la géométrie !
 
     def shape_raw_generat(self, last_pnt_pos, next_pnt_pos, shape_manager):
@@ -696,6 +521,7 @@ class PointEntry:
         pos_x, pos_y = self.raw["pos"][0], self.raw["pos"][1]
         self.shape_entry_start = [pos_x, pos_y]
         self.shape_entry_end = [pos_x, pos_y]
+        self.shape_bbox_um = [[pos_x, pos_y],[pos_x, pos_y]]
 
         # 2️⃣ Barrières de sécurité étanches basées uniquement sur le clone JSON
         shape_def = self.raw.get("shape")
@@ -738,6 +564,7 @@ class PointEntry:
             # 🚀 Extraction dynamique ultra-fiable du début et de la fin de la forme
             # (Basé sur vos lignes : self.draw_part[0]["start"] et self.draw_part[-1]["end"])
             self.shape_entry_start, self.shape_entry_end = shape_obj.get_start_end(recompute=False)
+            self.shape_bbox_um = shape_obj.get_bbox_shape()
 
         dynamic_label = None
         if hasattr(shape_obj, "get_shape_label_name"):
@@ -834,6 +661,7 @@ class PointManager:
                     current_entry.raw_shape_segments = []
                     current_entry.shape_entry_start = current_entry.raw["pos"]
                     current_entry.shape_entry_end = current_entry.raw["pos"]
+                    current_entry.shape_bbox_um = [current_entry.raw["pos"],current_entry.raw["pos"]]
                     # TODO: Ci-dessous contrôler l'utilitée, certainnement obsolette
                     current_entry.modified_shape = False # On valide le cache à vide
                     continue
@@ -944,7 +772,7 @@ class PointManager:
                 
                 # Le point ré-exécute sa géométrie (Chanfrein, Congé, Gorge ISO) en direct
 
-                print("DEBUG PointManager: refresh_drawing: appel: shape_raw_generat()")
+                #print("DEBUG PointManager: refresh_drawing: appel: shape_raw_generat()")
 
                 
                 self.entries[idx].shape_raw_generat(
@@ -956,6 +784,9 @@ class PointManager:
         # 🚀 ÉTAPE 3 : LE GRAND CHAÎNAGE GLOBAL (Ré-assemblage microns)
         # On vide les tiroirs de tous les points pour recréer la liste plate à jour
         raw_active_profile = self.build_flat_segments_list()
+        #print("== raw_active_profile =====================")
+        #print(raw_active_profile)
+        #print("===========================================")
         # Passage dans l'usine pour injecter les Bounding Boxes (Bbox)
         entities_active = cdraw.create_entities_from_raw(raw_list=raw_active_profile)
         #  LE PISTOLET À PEINTURE CENTRAL (Rendu Kivy)
@@ -965,6 +796,10 @@ class PointManager:
             liaison_line=self.barriere_segments, 
             liaison_color=self.barriere_color
         )
+        
+       # print("== curent_profile_seg_net =====================")
+       # print(self.curent_profile_seg_net)
+       # print("===========================================")
 
     def add_entry(self, index: int, hor: float, vert: float, shape=None, shape_label=None, shape_params=None) -> PointEntry:
         """Ajoute un nouveau PointEntry à la suite de l'index donné (index + 1)."""
@@ -1216,6 +1051,7 @@ class PointManager:
                     current_entry.raw_shape_segments = []
                     current_entry.shape_entry_start = current_entry.raw["pos"]
                     current_entry.shape_entry_end = current_entry.raw["pos"]
+                    current_entry.shape_bbox_um = [current_entry.raw["pos"],current_entry.raw["pos"]]
                     current_entry.modified_shape = False
                     continue
 

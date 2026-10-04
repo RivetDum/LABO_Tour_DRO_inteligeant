@@ -74,7 +74,7 @@ DEFAULT_DATA = {
         
         # 💾 Mémoire de fin de session pour la réouverture fluide de l'IHM
         "selected_part_idx": 4,           # Index de la pièce en cours d'usinage
-        "selected_tool_ident": "199",     # Identifiant textuel de l'outil monté au dernier arrêt (Comparateur Maître par défaut)
+        "selected_tool": ["199", 0, "def"],     # Identifiant de l'outil monté au dernier arrêt Et son crant MltiFix ("machine_config"-"index_multi_fix" correspondant à cette index!)
         "vc_ref_mat_idx": 0,              # Index de la matière de référence choisie pour la Vitesse de Coupe
         "auto_vc": False,                 # Régulation automatisée ou manuelle de la Vitesse de Coupe (VC)
         "tactile_keyboard": True          # Activation du clavier virtuel Kivy pour les dalles tactiles d'atelier
@@ -130,6 +130,7 @@ def save_json(path=SETTINGS_FILE, data=None):
         ("shortcuts", False), 
         ("axis", False), 
         ("user_config", False),
+        ("selected_tool", True),
         ("index_multi_fix", True)  # 🎯 Reste compact et lisible à chaque sauvegarde
     ]
     save_json_with_format(path, data, keys_compacted)

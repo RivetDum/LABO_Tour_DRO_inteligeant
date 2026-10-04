@@ -310,7 +310,7 @@
             size_hint_x: None
             width: "120dp"
         TextInput:
-            text: f"{root.mount_angle / 1000:.1f}" # Convertit les milli-degrés pour l'affichage
+            text: "OLD_Mount_angle" #f"{root.mount_angle / 1000:.1f}" # Convertit les milli-degrés pour l'affichage
             input_filter: 'float'
             multiline: False
             size_hint_x: None
@@ -441,8 +441,11 @@
 <CutLineSelect>:
     orientation: 'horizontal'
     size_hint_y: None
-    height: dp(52)
-    spacing: dp(10)
+    #height: dp(52)
+    # 🎯 HAUTEUR DYNAMIQUE : La ligne prend la hauteur exacte demandée par son contenu textuel.
+    # On ajoute dp(6) pour garder une marge (padding haut/bas) harmonieuse.
+    height: self.ids.box_txt_centrale.minimum_height + dp(6) if hasattr(self, 'ids') and 'box_txt_centrale' in self.ids else dp(92)
+    spacing: dp(3)
     padding: [dp(4), dp(3), dp(8), dp(3)]
 
     # A. LE FOND GLOBAL DE LA LIGNE (Vos 4 teintes réactives gérées par Python)
@@ -458,6 +461,8 @@
     BoxLayout:
         size_hint_x: None
         width: dp(54)
+        size_hint_y: 1.0 # 🎯 FORCE L'ICÔNE A PRENDRE TOUTE LA HAUTEUR ADAPTATIVE
+        #height: dp(52)
         padding: [dp(3), dp(3), dp(3), dp(3)]
         canvas.before:
             Color:
@@ -471,68 +476,41 @@
             source: root.source_icone
             fit_mode: 'contain'
 
-    # C. COLONNE CENTRALE 1 : Le Nom de l'outil & Ligne d'état Machine
+    # C. COLONNE CENTRALE 1 : Le Nom de l'outil & son porte-outil
     BoxLayout:
+        id: box_txt_centrale
         orientation: 'vertical'
-        size_hint_x: 0.65
-        spacing: dp(1)
+        size_hint_x: 1.0
+        size_hint_y: None
+        # On dit à ce bloc de mesurer sa propre hauteur en fonction des labels à l'intérieur
+        height: self.minimum_height 
+        spacing: dp(2)
 
         Label:
-            text: f"ID:{root.tool_ident} - {root.nom_outil}"
+            text: f"id: {root.tool_ident} - {root.nom_outil}"
             bold: True
-            font_size: '13sp'
+            font_size: '14sp'
             halign: 'left'
             valign: 'middle'
-            text_size: self.size
+            # 🎯 CALCUL TEXTE AVANCÉ : On force le label à mesurer sa hauteur réelle
+            # même si le texte s'étale sur 2, 3 ou 4 lignes !
+            size_hint_y: None
+            height: max(self.texture_size[1], dp(30))
+            text_size: [self.width, None] # Largeur fixe (celle de la colonne), hauteur libre
+            #text_size: self.size
             color: [0.95, 0.95, 0.98, 1]
 
-        BoxLayout:
-            orientation: 'horizontal'
-            spacing: dp(6)
+
+        Label:
+            text: f"{f'Porte_outil: {root.tool_mount}' if root.tool_mount is not None else 'Armoire'}"
+            font_size: '12sp'
+            color: [0.75, 0.75, 0.8, 1]
+            halign: 'left'
+            valign: 'middle'
             size_hint_y: None
-            height: dp(18)
-
-            # La petite LED de Homing physique (Calibrage jauge)
-            Widget:
-                size_hint_x: None
-                width: dp(10)
-                canvas.before:
-                    Color:
-                        # Vert si calibré complet, Rouge vif si jauge requise
-                        rgba: [0.1, 0.6, 0.2, 1] if root.est_calibre else [0.8, 0.1, 0.1, 1]
-                    Ellipse:
-                        pos: [self.x, self.y + dp(5)]
-                        size: [dp(8), dp(8)]
-
-            Label:
-                text: f"{'Calibré' if root.est_calibre else 'Homing Requis'}  |  {f'Support: {root.tool_mount}' if root.tool_mount is not None else 'Armoire'}"
-                font_size: '11sp'
-                color: [0.6, 0.6, 0.65, 1]
-                halign: 'left'
-                valign: 'middle'
-                text_size: self.size
-
-    # D. COLONNE DROITE 2 : Données de la Plaquette (Compacte et informative)
-    BoxLayout:
-        orientation: 'vertical'
-        size_hint_x: 0.35
-        spacing: dp(1)
-
-        Label:
-            text: f"Ins: {root.nom_plaquette}"
-            font_size: '11sp'
-            color: [0.7, 0.7, 0.75, 1]
-            halign: 'left'
-            valign: 'middle'
+            height: dp(16) # La ligne du bas reste sagement stable à 16dp
             text_size: self.size
 
-        Label:
-            text: f"Bec R: {root.rayon_plaquette:.3f} mm"
-            font_size: '11sp'
-            color: [0.55, 0.55, 0.6, 1]
-            halign: 'left'
-            valign: 'middle'
-            text_size: self.size
 
 <CutterPageHeader>:
     orientation: "horizontal"
@@ -546,104 +524,155 @@
             pos: self.pos
             size: self.size
 
-    # A. LES INFORMATIONS TEXTUELLES (Au milieu)
+    # A. LE BOUTON INFO / AIDE
     BoxLayout:
         orientation: "vertical"
-        spacing: "4dp"
-        padding: ["10dp", "6dp", "8dp", "6dp"]
-        size_hint_x: 0.48
-
-        # 🟢 LIGNE 1 : LE NOM DU BURIN (Texte seul)
-        BoxLayout:
-            orientation: "horizontal"
-            spacing: "4dp"
-            padding: 0
-            Label:
-                text: "Burin Actif :"
-                size_hint_x: 0.3
-                halign: "right"
-                text_size: self.size
-                valign: "middle"
-            ClickableLabel:
-                id: txt_tool_name
-                text: root.manager_parent.cutter_name if root.ihm_initialisee else "Chargement..."
-                size_hint_x: 0.7
-                bg_color: [0.18, 0.18, 0.22, 1] if (root.ihm_initialisee and root.manager_parent.mode_edition_actif) else [0.11, 0.11, 0.13, 1]
-                hover_color: [0.22, 0.22, 0.28, 1]
-                halign: "left"
-                valign: "middle"
-                on_release: 
-                    if root.ihm_initialisee: root.manager_parent.on_champ_click(self, lambda txt: txt, lambda val: setattr(root.manager_parent.cutter, 'name', val), "TOOL_NAME")
-
-        # 🟢 LIGNE 2 : LE NUMÉRO DE TOURELLE / PORTE-OUTIL (Nombre entier convertible)
-        BoxLayout:
-            orientation: "horizontal"
-            spacing: "4dp"
-            padding: 0
-            Label:
-                text: "Porte-outil n° :"
-                size_hint_x: 0.3
-                halign: "right"
-                text_size: self.size
-                valign: "middle"
-            ClickableLabel:
-                id: txt_tool_mount
-                # Affichage propre : extrait l'entier du manager s'il existe
-                text: str(root.manager_parent.tool_mount) if (root.ihm_initialisee and root.manager_parent.tool_mount is not None) else "Aucun"
-                size_hint_x: 0.7
-                bg_color: [0.18, 0.18, 0.22, 1] if (root.ihm_initialisee and root.manager_parent.mode_edition_actif) else [0.11, 0.11, 0.13, 1]
-                hover_color: [0.22, 0.22, 0.28, 1]
-                halign: "left"
-                valign: "middle"
-                # Aiguillage : Pas d'unité fournie (unit=None) donc calque texte flottant Excel-style,
-                # et la fonction convertit la saisie en entier propre int() pour le stockage en RAM.
-                on_release: 
-                    if root.ihm_initialisee: root.manager_parent.on_champ_click(self, lambda txt: int(txt) if (txt.strip().isdigit()) else None, lambda val: setattr(root.manager_parent.cutter, 'tool_mount', val), "TOOL_MOUNT")
-
-        # 🟢 LIGNE 3 : L'ANGLE DE FIXATION DU MANCHE (Décimal tactile avec unité deg)
-        BoxLayout:
-            orientation: "horizontal"
-            spacing: "4dp"
-            padding: 0
-            Label:
-                text: "Angle Fixation :"
-                size_hint_x: 0.3
-                halign: "right"
-                text_size: self.size
-                valign: "middle"
-            ClickableLabel:
-                id: txt_mount_angle
-                # Affichage converti de milli-degrés en degrés réels pour l'opérateur (ex: 45.0°)
-                text: f"{root.manager_parent.mount_angle / 1000:.1f}°" if root.ihm_initialisee else "0.0°"
-                size_hint_x: 0.7
-                bg_color: [0.18, 0.18, 0.22, 1] if (root.ihm_initialisee and root.manager_parent.mode_edition_actif) else [0.11, 0.11, 0.13, 1]
-                hover_color: [0.22, 0.22, 0.28, 1]
-                halign: "left"
-                valign: "middle"
-                # Aiguillage suprême : L'unité "deg" est fournie ! 
-                # Si le mode tactile est actif, cliquer fait surgir instantanément votre grand CalculatorPopup (1400x600).
-                # Le traitement convertit les degrés saisis en milli-degrés entiers pour le stockage machine.
-                on_release: 
-                    if root.ihm_initialisee: root.manager_parent.on_champ_click(self, lambda txt: int(round(float(txt.replace(',', '.')) * 1000.0)), lambda val: setattr(root.manager_parent.cutter, 'mount_angle', val), "MOUNT_ANG")
-
-    # B. LES BOUTONS TACTILES D'ÉDITION (Alignés à droite)
-    BoxLayout:
-        orientation: "vertical"
-        size_hint_x: 0.30
+        size_hint_x: 0.07
+        width: "40dp"
         spacing: "4dp"
         padding: "6dp"
 
-        Button:
-            text: "✏️ Éditer Burin"
-            font_size: "13sp"
-            background_color: [0.2, 0.4, 0.6, 1]
-            on_release: root.clic_editer_burin()
+    # B. LES INFORMATIONS TEXTUELLES (genre lignes de sélection)
+    BoxLayout:
+        orientation: "horizontal"
+        spacing: "4dp"
+        padding: ["10dp", "6dp", "8dp", "1dp"]
+        size_hint_x: 0.70
+    
+        # 0. LE FOND GLOBAL DU CADRE OUTIL SELECTIONNÉ (Copie amélioré de <CutLineSelect>)       
+        canvas.before:
+            Color:
+                rgba: [0.15, 0.25, 0.4, 1]      # 🔵 Bleu nuit (Outil actif dans la broche)
+            RoundedRectangle:
+                pos: self.pos
+                size: self.size
+                radius: [dp(4)]
 
-        Button:
-            text: "💎 Éditer Plaquette"
-            font_size: "13sp"
-            background_color: [0.2, 0.5, 0.5, 1]
-            on_release: root.clic_editer_plaquette()
+        BoxLayout:      # 1. LE BADGE DE GAUCHE : Concept de l'icône cadran sur Témoin de Sauvegarde
+            size_hint_x: None
+            size_hint_y: 1.0 # 🎯 FORCE L'ICÔNE A PRENDRE TOUTE LA HAUTEUR ADAPTATIVE
+            width: self.height
+            padding: [dp(3), dp(3), dp(3), dp(3)]
+            canvas.before:
+                Color:
+                    rgba: root.color_ico_tool
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [dp(4)]
+            Image:
+                source: app.screen_CUTTER["icon"]
+                fit_mode: 'contain'
+
+        BoxLayout:      # 2. COLONNE TEXTE A DROITE : Le Nom de l'outil & son porte-outil
+            id: box_txt_header
+            orientation: 'vertical'
+            size_hint_x: 1.0
+            size_hint_y: 1.0
+            spacing: dp(2)
+        
+            BoxLayout:      # 🟢 LIGNE 1 : LE NOM DU BURIN
+                id: b_name
+                orientation: "horizontal"
+                spacing: "4dp"
+                padding: 0
+                Label:
+                    text: "Burin Actif "
+                    size_hint_x: 0.15
+                    text_size: self.size
+                    color: [0.8,0.8,0.8,0.9]
+                    halign: "right"
+                    valign: "middle"
+                ClickableLabel:
+                    text: "..."
+                    size_hint_x: 0.1
+                    bg_color: [0.15, 0.25, 0.4, 1]      # 🔵
+                    hover_color:  [0.5,0.5,0.5,0.9]
+                    halign: "center"
+                    valign: "middle"
+                    on_release: root.clic_editer_burin()
+
+                ClickableLabel:
+                    text: "Chargement..."
+                    size_hint_x: 0.75
+                    bg_color: [0.15, 0.25, 0.4, 1]      # 🔵
+                    hover_color: [0.5,0.5,0.5,0.9]
+                    halign: "left"
+                    valign: "middle"
+                    on_release: root.clic_editer_burin()
+
+            BoxLayout:      # 🟢 LIGNE 2 : Porte-outil et insert
+                id: b_tow_line
+                orientation: "horizontal"
+                spacing: "4dp"
+                padding: 0
+
+                Label:
+                    text: "Porte-outil "
+                    size_hint_x: 0.15
+                    halign: "right"
+                    text_size: self.size
+                    color: [0.8,0.8,0.8,0.9]
+                    valign: "middle"
+                
+                ClickableLabel:
+                    text: root.manager_parent.active_tool_ident if root.ihm_initialisee else "..."
+                    size_hint_x: 0.1
+                    text: str(root.manager_parent.tool_mount) if (root.ihm_initialisee and root.manager_parent.tool_mount is not None) else "Aucun"
+                    bg_color: [0.15, 0.25, 0.4, 1]      # 🔵
+                    hover_color:  [0.5,0.5,0.5,0.9]
+                    halign: "center"
+                    valign: "middle"
+                    on_release: 
+                        if root.ihm_initialisee: root.manager_parent.on_champ_click(self, lambda txt: int(txt) if (txt.strip().isdigit()) else None, lambda val: setattr(root.manager_parent.cutter, 'tool_mount', val), "TOOL_MOUNT")
+
+                Label:
+                    text: "Insert "
+                    size_hint_x: 0.15
+                    halign: "right"
+                    text_size: self.size
+                    color: [0.8,0.8,0.8,0.9]
+                    valign: "middle"
+                ClickableLabel:
+                    # Affichage converti de milli-degrés en degrés réels pour l'opérateur (ex: 45.0°)
+                    text: f"designation insert" if root.ihm_initialisee else "-.-"
+                    size_hint_x: 0.32
+                    bg_color: [0.15, 0.25, 0.4, 1]      # 🔵
+                    hover_color: [0.5,0.5,0.5,0.9]
+                    halign: "left"
+                    valign: "middle"
+                    on_release: root.clic_editer_plaquette()
+
+                Label:
+                    text: "rayon"
+                    size_hint_x: 0.08
+                    halign: "right"
+                    text_size: self.size
+                    color: [0.8,0.8,0.8,0.9]
+                    valign: "middle"
+                ClickableLabel:
+                    text: f"0.200 mm" if root.ihm_initialisee else "-.-"
+                    size_hint_x: 0.2
+                    bg_color: [0.15, 0.25, 0.4, 1]      # 🔵
+                    hover_color: [0.5,0.5,0.5,0.9]
+                    halign: "left"
+                    valign: "middle"
+                    on_release: root.clic_editer_plaquette()
+
+    # C. VITESSE DE COPUPE DE L'INSERT
+    BoxLayout:
+        orientation: "vertical"
+        size_hint_x: 0.23
+        spacing: "8dp"
+        padding: ["10dp", "2dp", "8dp", "1dp"]
+
+        Label:
+            text: "Vitesse de Coupe matière"
+        Label:
+            text: "Sélect idx vc : ....."
+        Label:
+            text: "Ex: acier doux ... m/min"
+
 
 <CutterPageDashboard>:
     orientation: "horizontal"
@@ -655,7 +684,7 @@
     # =====================================================================
     BoxLayout:
         orientation: "vertical"
-        size_hint_x: 0.55
+        size_hint_x: 0.35
         spacing: "6dp"
         padding: "6dp"
         canvas.before:
@@ -664,7 +693,14 @@
             Rectangle:
                 pos: self.pos
                 size: self.size
-        
+
+        BoxLayout:
+            id: box_actif_tool
+            orientation: "vertical"
+            size_hint_y: None
+            height: self.minimum_height  # Dit à la box de grandir selon son contenu
+            spacing: "5dp"
+
         Label:
             text: "Sélectionnez un outil"
             bold: True
@@ -681,9 +717,9 @@
             bar_color: [0.3, 0.3, 0.35, 1]
             scroll_type: ['content', 'bars']  # Hyper réactif au glissement du doigt
 
-            # 🟢 VOTRE CONCEPT : La Box Verticale qui va accueillir nos lignes !
+            # La Box Verticale qui va accueillir nos lignes !
             BoxLayout:
-                id: box_select_tool  # 🎯 Le nouveau nom d'ID exclusif !
+                id: box_select_tool  # nom d'ID exclusif !
                 orientation: "vertical"
                 size_hint_y: None
                 height: self.minimum_height  # Dit à la box de grandir selon son contenu
@@ -693,11 +729,11 @@
     # ZONE DROITE : APERÇU DU BURIN SÉLECTIONNÉ ET CORRECTEURS SENSORS
     # =====================================================================
 
-    # Zone d'attente pour le reste des commandes (manches, plaquettes, angles)
+    # 3 lignes principales 1:Titre; 2: à gauche fixarions à droite offsets; 3: à gauche, en haut le manche en bas l'insert; à droite le dessin
 
     BoxLayout:
         orientation: "vertical"
-        size_hint_x: 0.45
+        size_hint_x: 0.65
         spacing: "8dp"
         padding: "8dp"
         canvas.before:
@@ -706,188 +742,433 @@
             Rectangle:
                 pos: self.pos
                 size: self.size
+        BoxLayout:              #Ligne de titres (à voir si le header suffit pas ?)
+            orientation: "horizontal"
+            size_hint_y: 0.1
 
-        Label:
-            text: "📐 CORRECTEURS GÉOMÉTRIQUES D'OFFSETS"
-            bold: True
-            size_hint_y: None
-            height: "30dp"
-            font_size: "13sp"
-            color: [0.2, 0.6, 0.9, 1]
-
-        # --- LE COMPOSANT 1 : LA GRILLE DES OFFSETS ---
-
-        ClickableLabel:
-            id: txt_offset_x0
-            text: f"{(root.manager_parent.offset_vert[0] / 1000.0):.3f}" if root.ihm_initialisee else "0.000"
-            bg_color: [0.18, 0.18, 0.22, 1] if (root.ihm_initialisee and root.manager_parent.mode_edition_actif) else [0.11, 0.11, 0.13, 1]
-            hover_color: [0.22, 0.22, 0.28, 1]
-            # 🟢🟢🟢 APPEL COMPACT ET ULTRA-LISIBLE :
-            on_release: if root.ihm_initialisee: root.manager_parent.on_champ_click(self, lambda txt: int(round(float(txt.replace(',', '.')) * 1000.0)), lambda val: root.manager_parent.cutter.offset_vert.__setitem__(0, val), label_abbr="X0")
-
-
-
-
-        GridLayout:
-            cols: 5
-            size_hint_y: None
-            height: "110dp"
-            spacing: "6dp"
-            padding: "4dp"
-
-            # LIGNE 1 : LES TITRES DE COLONNES
+            Botton2ImageLed:
+                id: btn_dro_ofst
+                text: 'DRO_ofst'
+                source_image: app.dro_visual_offset_cut[3] if root.ihm_initialisee else "bitmaps/icone.png"
+                display_mode: "BOTH"    # "TEXT_ONLY" "ICON_ONLY" "BOTH"
+                statut_depart: "nominal"  #"actif" "nominal_bg_claire" "nominal"
+                target_screen: "sw_corp_tool"
+                size_hint_y: 1
+                size_hint_x: None
+                width: self.height * 1.2
+                on_release: root.manager_parent.ouvrir_popup_ofst_bec()
+            Image:
+                source: app.dro_visual_offset_cut[3] if root.ihm_initialisee else "bitmaps/icone.png"
+                size_hint_x: None
+                width: self.height * 1.2
             Label:
-                text: "Axe"
-                font_size: "11sp"
-                color: [0.5, 0.5, 0.5, 1]
-                size_hint_x: 0.15
-            Label:
-                text: "0: Palpeur"
-                font_size: "11sp"
-                color: [0.5, 0.5, 0.5, 1]
-            Label:
-                text: "1: Usure"
-                font_size: "11sp"
-                color: [0.5, 0.5, 0.5, 1]
-            Label:
-                text: "2: Ajustem."
-                font_size: "11sp"
-                color: [0.5, 0.5, 0.5, 1]
-            Label:
-                text: "SOMME"
-                font_size: "11sp"
-                color: [0.2, 0.7, 0.2, 1]
-                bold: True
+                text: "Décalage depuis le centre du bec de coupe du burin"
+                size_hint_x: 0.9
+                text_size: self.size
+                color: [0.8,0.8,0.8,0.9]
+                halign: "left"
+                valign: "middle"
 
-            # --- LIGNE 2 : SAISIE AXE X (TRANSVERSAL / DIAMÈTRE) ---
-            Label:
-                text: "X (Diam)"
-                bold: True
-                font_size: "12sp"
-                size_hint_x: 0.15
-            TextInput:
-                id: txt_offset_x0
-                text: f"{(root.manager_parent.offset_vert[0] / 1000.0):.3f}" if root.ihm_initialisee else "--"
-                input_filter: "float"
-                multiline: False
-                # 🟢 RÉACTIVATION : Débloque la case uniquement si l'IHM est prête ET que le mode édition est actif !
-                # readonly: not root.ihm_initialisee or not root.manager_parent.mode_edition_actif
-                on_text_validate: if root.ihm_initialisee: root.manager_parent.modifier_offset_couche(self.text, "vert", 0)
-            TextInput:
-                id: txt_offset_x1
-                text: f"{(root.manager_parent.offset_vert[1] / 1000.0):.3f}" if root.ihm_initialisee else "--"
-                readonly: True  # 🔒 Toujours verrouillé pour l'usure de production
-                background_color: [0.65, 0.45, 0.45, 1]
-                color: [0.5, 0.5, 0.5, 1]
-            TextInput:
-                id: txt_offset_x2
-                text: f"{(root.manager_parent.offset_vert[2] / 1000.0):.3f}" if root.ihm_initialisee else "--"
-                input_filter: "float"
-                multiline: False
-                # 🟢 RÉACTIVATION : Idem pour la couche d'ajustement fin
-                readonly: not root.ihm_initialisee or not root.manager_parent.mode_edition_actif
-                on_text_validate: if root.ihm_initialisee: root.manager_parent.modifier_offset_couche(self.text, "vert", 2)
-            Label:
-                # 🟢 SÉCURISÉ : Le total vert attend l'armement pour faire sa somme
-                text: f"{(sum(root.manager_parent.offset_vert) / 1000.0):.3f}" if root.ihm_initialisee else "--.---"
-                bold: True
-                color: [0.2, 0.8, 0.2, 1]
+        BoxLayout:              #Ligne Fixation / Offsets
+            orientation: "horizontal"
+            size_hint_y: 0.3
+            spacing: "8dp"
 
-            # --- LIGNE 3 : SAISIE AXE Z (LONGITUDINAL) ---
-            Label:
-                text: "Z (Long)"
-                bold: True
-                font_size: "12sp"
-                size_hint_x: 0.15
-            TextInput:
-                id: txt_offset_z0
-                text: f"{(root.manager_parent.offset_hor[0] / 1000.0):.3f}" if root.ihm_initialisee else "--"
-                input_filter: "float"
-                multiline: False
-                readonly: not root.ihm_initialisee or not root.manager_parent.mode_edition_actif
-                on_text_validate: if root.ihm_initialisee: root.manager_parent.modifier_offset_couche(self.text, "hor", 0)
-            TextInput:
-                id: txt_offset_z1
-                text: f"{(root.manager_parent.offset_hor[1] / 1000.0):.3f}" if root.ihm_initialisee else "--"
-                readonly: True
-                background_color: [0.65, 0.65, 0.65, 1]
-                color: [0.65, 0.15, 0.15, 1]
-            TextInput:
-                id: txt_offset_z2
-                text: f"{(root.manager_parent.offset_hor[2] / 1000.0):.3f}" if root.ihm_initialisee else "--"
-                input_filter: "float"
-                multiline: False
-                readonly: not root.ihm_initialisee or not root.manager_parent.mode_edition_actif
-                on_text_validate: if root.ihm_initialisee: root.manager_parent.modifier_offset_couche(self.text, "hor", 2)
-            Label:
-                text: f"{(sum(root.manager_parent.offset_hor) / 1000.0):.3f}" if root.ihm_initialisee else "--.---"
-                bold: True
-                color: [0.2, 0.8, 0.2, 1]
-
-        # --- LISERÉ DE SÉPARATION DISCRET ---
-        Widget:
-            size_hint_y: None
-            height: "2dp"
-            canvas.before:
-                Color: 
-                    rgba: [0.2, 0.2, 0.25, 1]
-                Rectangle: 
-                    pos: self.pos
-                    size: self.size
-
-        # --- BLOC DISCRET D'INFORMATIONS BAS DU PANNEAU ---
-        BoxLayout:
-            orientation: "vertical"
-            size_hint_y: 1.0
-            padding: "4dp"
+            BoxLayout:              # Fixation (un peux toutes les données de base)
+                orientation: "vertical"
+                size_hint_x: 0.5
             
-            Label:
-                text: "Outil en cours : ID " + (root.manager_parent.active_tool_ident if root.ihm_initialisee else "--")
-                font_size: "12sp"
-                bold: True
-                color: [0.6, 0.6, 0.6, 1]
-                halign: "left"
-                text_size: self.size
-                
-            Label:
-                text: "⚙️ Prochain bloc : Angles du manche (Lead Angle, Multifix) & Profil Plaquette"
-                font_size: "11sp"
-                color: [0.4, 0.4, 0.45, 1]
-                halign: "left"
-                text_size: self.size
+                BoxLayout:    # MultiFixe
+                    orientation: "vertical"
+                    size_hint_x: 1
+                    size_hint_y: 1
+                    #width: self.height
+                    padding: [dp(3), dp(3), dp(3), dp(3)]
+                    canvas.before:
+                        Color:
+                            rgba: root.color_ofst["box_tourelle"]
+                        Line:
+                            rounded_rectangle: [self.x, self.y, self.width, self.height, dp(6)]
+                            width: dp(1)
+                    FloatLayout:
+                        size_hint: (1, 0.84)
 
-        # --- LE COMPOSANT 2 : LE LISERÉ (Parfaitement aligné sur GridLayout !) ---
-        Widget:
-            size_hint_y: None
-            height: "2dp"
-            canvas.before:
-                Color: 
-                    rgba: [0.2, 0.2, 0.25, 1]
-                Rectangle: 
-                    pos: self.pos
-                    size: self.size
+                        BoxLayout:  # Image MultiFix
+                            orientation: "vertical"
+                            size_hint: 0.42,1
+                            pos: self.parent.pos
+                            Image:
+                                source: "bitmaps/W315000.png"
+                                fit_mode: 'contain'
+                        
+                        BoxLayout:  # Data MultiFix
+                            orientation: "vertical"
+                            size_hint: 1.0, 1.0
+                            pos: self.parent.pos
 
-        # --- LE COMPOSANT 3 : LA BOX D'INFOS (Parfaitement alignée également !) ---
-        BoxLayout:
-            orientation: "vertical"
-            size_hint_y: 1.0
-            padding: "4dp"
-            
-            Label:
-                text: f"Outil en cours : ID {root.manager_parent.active_tool_ident}" if root.ihm_initialisee else "Outil en cours : ID --"
-                font_size: "12sp"
-                bold: True
-                color: [0.6, 0.6, 0.6, 1]
-                halign: "left"
-                text_size: self.size
-                
-            Label:
-                text: "⚙️ Prochain bloc : Angles du manche (Lead Angle, Multifix) & Profil Plaquette"
-                font_size: "11sp"
-                color: [0.4, 0.4, 0.45, 1]
-                halign: "left"
-                text_size: self.size
+                            BoxLayout:  # TITRE: Tourelle porte-outil
+                                orientation: "horizontal"
+                                size_hint: 1.0, 0.6
+                                Widget:
+                                    size_hint_x: 0.35
+                                Label:
+                                    text: "Tourelle porte-outil"
+                                    size_hint_x: 0.65
+                                    text_size: self.size
+                                    color: [0.8,0.8,0.8,0.9]
+                                    bold: True
+                                    halign: "center"
+                                    valign: "middle"
+
+                            BoxLayout:  # SOUS-TITRE:Offset type
+                                orientation: "horizontal"
+                                size_hint: 1.0, 0.6
+                                Widget:
+                                    size_hint_x: 0.35
+
+                                Label:
+                                    id:lbl_titre_ofst
+                                    text: "Offsets type"
+                                    size_hint_x: 0.65
+                                    text_size: self.size
+                                    color: [0.8,0.8,0.8,0.9]
+                                    bold: True
+                                    halign: "center"
+                                    valign: "middle"
+                                
+                            BoxLayout:    # Angle crant MultiFix
+                                orientation: "vertical"
+                                size_hint_x: 1
+                                canvas.before:
+                                    Color:
+                                        rgba: root.color_ofst["b_bg_ang_idx"]
+                                    RoundedRectangle:
+                                        pos: self.pos
+                                        size: self.size
+                                        radius: [dp(4)] 
+                                Label:
+                                    id: lbl_tour_idx_idx
+                                    text: "Index: ... Index: ... °"
+                                    size_hint_x: 0.8
+                                    text_size: self.size
+                                    color: [0.8,0.8,0.8,0.9]
+                                    halign: "right"
+                                    valign: "middle"
+                                Label:
+                                    id: lbl_tour_idx_angle
+                                    text: "Index: ... angle: ... °"
+                                    size_hint_x: 0.98
+                                    text_size: self.size
+                                    color: [0.8,0.8,0.8,0.9]
+                                    halign: "right"
+                                    valign: "middle"
+
+                            BoxLayout:    # Angle fixation tourelle-porte-outil
+                                orientation: "horizontal"
+                                size_hint_x: 1
+                                canvas.before:
+                                    Color:
+                                        rgba: root.color_ofst["b_bg_ang_tour"]
+                                    RoundedRectangle:
+                                        pos: self.pos
+                                        size: self.size
+                                        radius: [dp(4)]                        
+                                Label:
+                                    id: lbl_tour_brid
+                                    text: "angle bridage: ... °"
+                                    size_hint_x: 0.98
+                                    text_size: self.size
+                                    color: [0.8,0.8,0.8,0.9]
+                                    halign: "right"
+                                    valign: "middle"
+
+                    BoxLayout:    # Angle TOTAL de la fixation
+                        orientation: "horizontal"
+                        size_hint_x: 1
+                        size_hint_y: 0.16    
+                        padding: 0
+                        canvas.before:
+                            Color:
+                                rgba: root.color_ofst["b_bg_ang_tot"]
+                            RoundedRectangle:
+                                pos: self.pos
+                                size: self.size
+                                radius: [dp(4)]        
+
+                        ClickableLabel:
+                            id: lbl_tour_tot
+                            text: "... °"
+                            size_hint_x: 1.0
+                            #width: dp(70)
+                            text_size: self.size
+                            color: [0.8,0.8,0.8,0.9]
+                            bg_color: [0.98, 0.18, 0.22, 0]
+                            hover_color:  [0.5,0.5,0.5,0.5]
+                            bold: True
+                            halign: "right"
+                            valign: "middle"
+
+            BoxLayout:              # Offset (selon fixation)
+                orientation: "vertical"
+                size_hint_x: 0.5
+                spacing: "4dp"
+                padding: dp(3)
+                canvas.before:
+                    Color:
+                        rgba: [0, 0, 0, 0] #if root.ofst_tourelle[0] else [0.8,0.5,0.5,0.6]
+                    RoundedRectangle:
+                        pos: self.pos
+                        size: self.size
+                        radius: [dp(4)]
+                    Color:
+                        rgba: root.color_ofst["box_ofst_t"]
+                    Line:
+                        rounded_rectangle: [self.x, self.y, self.width, self.height, dp(6)]
+                        width: dp(1)
+
+                BoxLayout:              # entêtes colonnes
+                    id: b_ofst_m
+                    orientation: "horizontal"
+                    size_hint_x: 1.0
+
+                    BoxLayout:    # Alerte_rouge : Angle réf
+                        orientation: "horizontal"
+                        size_hint_x: 0.3
+                        padding: 0
+                        canvas.before:
+                            Color:
+                                rgba: root.color_ofst["b_bg_ref_ang"]
+                            RoundedRectangle:
+                                pos: self.pos
+                                size: self.size
+                                radius: [dp(4)] 
+
+                        Label:  # Angle de référence
+                            id: lbl_ofst_a_ref
+                            text: "réf: 180.00°"
+                            size_hint_x: 1
+                            text_size: self.size
+                            color: [1,1,1,1]
+                            halign: "center"
+                            valign: "middle"
+                    Label:  # Entête de colonne 1
+                        text: "rayon"
+                        size_hint_x: 0.35
+                        text_size: self.size
+                        color: [0.8,0.8,0.8,0.9]
+                        halign: "center"
+                        valign: "middle"
+                    Label:  # Entête de colonne 1
+                        text: "trainard"
+                        size_hint_x: 0.35
+                        text_size: self.size
+                        color: [0.8,0.8,0.8,0.9]
+                        halign: "center"
+                        valign: "middle"
+
+                BoxLayout:              # Offset Palpage
+                    id: b_ofst_p
+                    orientation: "horizontal"
+                    size_hint_x: 1.0
+                    canvas.before:
+                        Color:
+                            rgba: root.color_ofst["b_bg_ofst_p"]
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [dp(4)]
+
+                    Label:
+                        text: "- lbl txt -"
+                        size_hint_x: 0.3
+                        text_size: self.size
+                        color: [0.8,0.8,0.8,0.9]
+                        halign: "right"
+                        valign: "middle"
+
+                    ClickableLabel:
+                        text: " -vert- "
+                        size_hint_x: 0.35
+                        hover_color:  [0.5,0.5,0.5,0.9]
+                        halign: "right"
+                        valign: "middle"
+                        on_release: 
+                            #if root.ihm_initialisee: root.manager_parent.on_champ_click(self, lambda txt: txt, lambda val: setattr(root.manager_parent.cutter, 'name', val), "TOOL_NAME")
+
+                    ClickableLabel:
+                        text: " -hor- "
+                        size_hint_x: 0.35
+                        hover_color:  [0.5,0.5,0.5,0.9]
+                        halign: "right"
+                        valign: "middle"
+                        on_release: 
+                BoxLayout:              # Offset Machine
+                    id: b_ofst_m
+                    orientation: "horizontal"
+                    size_hint_x: 1.0
+                    canvas.before:
+                        Color:
+                            rgba: root.color_ofst["b_bg_ofst_m"]
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [dp(4)]
+
+                    Label:
+                        text: "- lbl txt -"
+                        size_hint_x: 0.3
+                        text_size: self.size
+                        color: [0.8,0.8,0.8,0.9]
+                        halign: "right"
+                        valign: "middle"
+
+                    ClickableLabel:
+                        text: " -vert- "
+                        size_hint_x: 0.35
+                        hover_color:  [0.5,0.5,0.5,0.9]
+                        halign: "right"
+                        valign: "middle"
+                        on_release: 
+                            #if root.ihm_initialisee: root.manager_parent.on_champ_click(self, lambda txt: txt, lambda val: setattr(root.manager_parent.cutter, 'name', val), "TOOL_NAME")
+
+                    ClickableLabel:
+                        text: " -hor- "
+                        size_hint_x: 0.35
+                        hover_color:  [0.5,0.5,0.5,0.9]
+                        halign: "right"
+                        valign: "middle"
+                        on_release: 
+                BoxLayout:              # Offset Mesuré (offset fin opérateur)
+                    id: b_ofst_c
+                    orientation: "horizontal"
+                    size_hint_x: 1.0
+                    canvas.before:
+                        Color:
+                            rgba: root.color_ofst["b_bg_ofst_c"]
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [dp(4)]
+
+                    Label:
+                        text: "- lbl txt -"
+                        size_hint_x: 0.3
+                        text_size: self.size
+                        color: [0.8,0.8,0.8,0.9]
+                        halign: "right"
+                        valign: "middle"
+
+                    ClickableLabel:
+                        text: " -vert- "
+                        size_hint_x: 0.35
+                        hover_color:  [0.5,0.5,0.5,0.9]
+                        halign: "right"
+                        valign: "middle"
+                        on_release: 
+                            #if root.ihm_initialisee: root.manager_parent.on_champ_click(self, lambda txt: txt, lambda val: setattr(root.manager_parent.cutter, 'name', val), "TOOL_NAME")
+
+                    ClickableLabel:
+                        text: " -hor- "
+                        size_hint_x: 0.35
+                        hover_color:  [0.5,0.5,0.5,0.9]
+                        halign: "right"
+                        valign: "middle"
+                        on_release: 
+                BoxLayout:              # Offset TOTAL
+                    id: b_ofst_t
+                    orientation: "horizontal"
+                    size_hint_x: 1.0
+                    canvas.before:
+                        Color:
+                            rgba: root.color_ofst["b_bg_ofst_t"]
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [dp(4)]
+
+                    Label:
+                        text: "- lbl txt -"
+                        size_hint_x: 0.3
+                        text_size: self.size
+                        bold: True
+                        color: [0.8,0.8,0.8,0.9]
+                        halign: "right"
+                        valign: "middle"
+
+                    ClickableLabel:
+                        text: " -vert- "
+                        bold: True
+                        size_hint_x: 0.35
+                        hover_color:  [0.5,0.5,0.5,0.9]
+                        halign: "right"
+                        valign: "middle"
+                        on_release: 
+                            #if root.ihm_initialisee: root.manager_parent.on_champ_click(self, lambda txt: txt, lambda val: setattr(root.manager_parent.cutter, 'name', val), "TOOL_NAME")
+
+                    ClickableLabel:
+                        text: " -hor- "
+                        bold: True
+                        size_hint_x: 0.35
+                        hover_color:  [0.5,0.5,0.5,0.9]
+                        halign: "right"
+                        valign: "middle"
+                        on_release: 
+
+        BoxLayout:              #Ligne Géométrie abbrégée
+            orientation: "horizontal"
+            size_hint_y: 0.6
+            BoxLayout:              # Dessin/image
+                orientation: "vertical"
+                size_hint_x: 0.5
+            BoxLayout:              # Géométrie
+                orientation: "vertical"
+                size_hint_x: 0.5
+                BoxLayout:              # Manche
+                    orientation: "vertical"
+                    size_hint_y: 0.5
+                    
+                    Label:
+                        text: "Box corp d'outil"
+                        size_hint_x: 1
+                        text_size: self.size
+                        color: [0.8,0.8,0.8,0.9]
+                        halign: "right"
+                        valign: "middle"
+
+                    #Botton2ImageLed:    # 🎛️ Mode édition du burin
+                    #    text: 'Burin'
+                    #    source_image: "bitmaps/burin.png"
+                    #    display_mode: "BOTH"    #"ICON_ONLY"
+                    #    statut_depart: "nominal"
+                    #    target_screen: "sw_corp_tool"
+                    #    size_hint_y: 1
+                    #    size_hint_x: None
+                    #    width: self.height * 1.2
+                    #    on_release: root.clic_editer_burin()
 
 
+
+                BoxLayout:              # Insert
+                    orientation: "vertical"
+                    size_hint_y: 0.5
+
+                    Label:
+                        text: "Insert ident ..."
+                        size_hint_x: 1
+                        text_size: self.size
+                        color: [0.8,0.8,0.8,0.9]
+                        halign: "right"
+                        valign: "middle"
+
+                    #Botton2ImageLed:    # 🎛️ Mode édition de l'insert
+                    #    text: 'Insert'
+                    #    source_image: "bitmaps/insert.png"
+                    #    display_mode: "BOTH"
+                    #    statut_depart: "nominal_warning"
+                    #    target_screen: "sw_corp_tool"
+                    #    size_hint_y: 1
+                    #    size_hint_x: None
+                    #    width: self.height * 1.2
+                    #    on_release: root.clic_editer_plaquette()
 
 

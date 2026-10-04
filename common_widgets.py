@@ -8,10 +8,10 @@ from copy import copy
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
+from kivy.uix.image import Image
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.togglebutton import ToggleButtonBehavior
 from kivy.properties import BooleanProperty, StringProperty
-#from kivy.uix.spinner import Spinner, SpinnerOption, SpinnerDropdown
 from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.dropdown import DropDown
 from kivy.graphics import Color, Rectangle, RoundedRectangle
@@ -652,7 +652,6 @@ class BottonImageLed(ButtonBehavior, BoxLayout):
         self.state = "normal"
         return super().on_release()
 
-
 class SwitchImageLed(ButtonBehavior, BoxLayout):
     """ 🎛️ INTERRUPTEUR TACTILE AVEC PALIER DE PROPRIÉTÉS ISOLÉES (V_7.2 Master) """
     show_both = BooleanProperty(False)
@@ -724,6 +723,329 @@ class SwitchImageLed(ButtonBehavior, BoxLayout):
         else:
             self.display_mode = "TEXT_ONLY"
 
+
+
+class OLD_Botton2ImageLed(ButtonBehavior, BoxLayout):
+    """
+    🖥️ BOUTON INDUSTRIEL EN PUR PYTHON (Version 8.6 - Zéro Syntax Error)
+    Intègre une gestion dynamique et extensible des statuts cosmétiques 3D.
+    """
+    
+    # 🎯 LE DICTIONNAIRE DE BASE ENTIÈREMENT SÉCURISÉ (Plus de variables vides !)
+    DICTIONNAIRE_STATUS = {
+        "nominal": {
+            "cadre_color": [0.25, 0.25, 0.28, 1],
+            "bg_color": [0.12, 0.12, 0.14, 1],
+            "off_x": 3.0, "off_y": 2.0, "dim_w": 4.0, "dim_h": 3.0,
+            "radius": [5.0, 4.0, 5.0, 7.0],
+            "text_color": [0.7, 0.7, 0.7, 1]
+        },
+        "volant_actif": {
+            "cadre_color": [0.15, 0.45, 0.7, 1],
+            "bg_color": [0.15, 0.25, 0.4, 1],
+            "off_x": 1.5, "off_y": 1.5, "dim_w": 5.0, "dim_h": 5.0,
+            "radius": [6.0, 8.0, 6.0, 5.0],
+            "text_color": [0.9, 0.95, 1, 1]
+        },
+        "volant_calibre": {
+            "cadre_color": [0.9, 0.5, 0.0, 1],
+            "bg_color": [0.18, 0.15, 0.12, 1],
+            "off_x": 3.0, "off_y": 2.0, "dim_w": 4.0, "dim_h": 3.0,
+            "radius": [7.0, 5.0, 7.0, 10.0],
+            "text_color": [0.9, 0.6, 0.2, 1]
+        },
+        "alerte": {
+            "cadre_color": [0.8, 0.2, 0.2, 1],
+            "bg_color": [0.2, 0.1, 0.1, 1],
+            "off_x": 3.0, "off_y": 2.0, "dim_w": 4.0, "dim_h": 3.0,
+            "radius": [5.0, 5.0, 5.0, 5.0],
+            "text_color": [1, 0.4, 0.4, 1]
+        }
+    }
+
+    def __init__(self, text="- -", source_image="", display_mode="TEXT_ONLY", show_both=False, statut_depart="nominal", **kwargs):
+        kwargs.setdefault('orientation', 'vertical')
+        kwargs.setdefault('padding', [dp(6), dp(6), dp(6), dp(6)])
+        kwargs.setdefault('spacing', dp(4))
+        kwargs.setdefault('size_hint', (1.0, 1.0))
+        super().__init__(**kwargs)
+
+        self.text_bouton = text
+        self.source_image = source_image
+        self.display_mode = display_mode
+        self.show_both = show_both
+        self.current_status = statut_depart
+
+        # Widgets enfants
+        self.ui_image = Image(fit_mode='contain', allow_stretch=True, size_hint_x=None, pos_hint={"center_x": 0.5})
+        self.ui_label = Label(text=self.text_bouton, bold=True, halign="center", valign="middle")
+        self.ui_label.bind(size=lambda instance, value: setattr(instance, 'text_size', value))
+        
+        self.add_widget(self.ui_image)
+        self.add_widget(self.ui_label)
+
+        # Moteur de rendu graphique
+        with self.canvas.before:
+            self.draw_cadre_color = Color()
+            self.draw_cadre_rect = RoundedRectangle()
+            self.draw_bg_color = Color()
+            self.draw_bg_rect = RoundedRectangle()
+
+        self.bind(pos=self._rafraichir_geometrie_canvas, size=self._rafraichir_geometrie_canvas)
+        self.appliquer_statut_visuel(self.current_status)
+
+    # ➕ LA NOUVELLE FONCTION EXTENSIBLE : AJOUTER OU MODIFIER UN STATUT
+    @classmethod
+    def enregistrer_ou_editer_statut(cls, nom_statut: str, parametres_style: dict):
+        """
+        🛠️ LA PASSERELLE CONFIGURABLE :
+        Permet au programme principal d'ajouter un nouveau style (ex: 'mode_edition')
+        ou d'écraser un look existant en injectant un sous-dictionnaire complet.
+        """
+        nom_propre = str(nom_statut).strip().lower()
+        
+        # Structure par défaut pour éviter qu'un paramètre manquant ne fasse crasher le bouton
+        modele_securite = {
+            "cadre_color": [0.5, 0.5, 0.5, 1],
+            "bg_color": [0.2, 0.2, 0.2, 1],
+            "off_x": 3.0, "off_y": 2.0, "dim_w": 4.0, "dim_h": 3.0,
+            "radius": [5.0, 5.0, 5.0, 5.0],
+            "text_color": [1.0, 1.0, 1.0, 1]
+        }
+        
+        # Fusion intelligente : on garde le modèle s'il manque des clés dans parametres_style
+        if nom_propre not in cls.DICTIONNAIRE_STATUS:
+            cls.DICTIONNAIRE_STATUS[nom_propre] = modele_securite
+            
+        cls.DICTIONNAIRE_STATUS[nom_propre].update(parametres_style)
+        print(f"🎨 [BottonImageLed] Le dictionnaire global a enregistré le statut : {nom_propre}")
+
+    def appliquer_statut_visuel(self, nom_statut: str):
+        """ 🎛️ COMMUTATEUR VISUEL """
+        self.current_status = str(nom_statut).strip().lower()
+        style = self.DICTIONNAIRE_STATUS.get(self.current_status, self.DICTIONNAIRE_STATUS["nominal"])
+
+        self.draw_cadre_color.rgba = style["cadre_color"]
+        self.draw_bg_color.rgba = style["bg_color"]
+        self.ui_label.color = style["text_color"]
+
+        # Aiguillage Icone/Texte
+        has_icon = self.source_image != "" and os.path.exists(self.source_image)
+        has_icon = True
+        if has_icon:
+            self.ui_image.source = self.source_image
+            self.display_mode = "BOTH" if self.show_both else "ICON_ONLY"
+        else:
+            self.display_mode = "TEXT_ONLY"
+
+        if self.display_mode == "BOTH":
+            self.ui_image.size_hint_y = 0.55
+            self.ui_label.size_hint_y = 0.45
+            self.ui_label.font_size = "10sp"
+            self.ui_image.opacity, self.ui_label.opacity = 1, 1
+        elif self.display_mode == "ICON_ONLY":
+            self.ui_image.size_hint_y = 1.0
+            self.ui_label.size_hint_y = None
+            self.ui_label.height = 0
+            self.ui_image.opacity, self.ui_label.opacity = 1, 0
+        else:
+            self.ui_image.size_hint_y = None
+            self.ui_image.height = 0
+            self.ui_label.size_hint_y = 1.0
+            self.ui_label.font_size = "13sp"
+            self.ui_image.opacity, self.ui_label.opacity = 0, 1
+
+        self._rafraichir_geometrie_canvas()
+
+    def _rafraichir_geometrie_canvas(self, *args):
+        """ 📐 RE-DRESSAGE DU CANVAS """
+        style = self.DICTIONNAIRE_STATUS.get(self.current_status, self.DICTIONNAIRE_STATUS["nominal"])
+        radius_dp = [dp(r) for r in style["radius"]]
+
+        self.draw_cadre_rect.pos = self.pos
+        self.draw_cadre_rect.size = self.size
+        self.draw_cadre_rect.radius = radius_dp
+
+        ox, oy = dp(style["off_x"]), dp(style["off_y"])
+        dw, dh = dp(style["dim_w"]), dp(style["dim_h"])
+        
+        self.draw_bg_rect.pos = (self.x + ox, self.y + oy)
+        self.draw_bg_rect.size = (self.width - dw, self.height - dh)
+        self.draw_bg_rect.radius = radius_dp
+
+        if self.ui_image.opacity == 1:
+            self.ui_image.width = self.ui_image.height
+
+    def on_release(self):
+        self.state = "normal"
+        return super().on_release()
+import os
+from kivy.uix.behaviors import ButtonBehavior
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.image import Image
+from kivy.uix.label import Label
+from kivy.graphics import Color, RoundedRectangle
+from kivy.metrics import dp
+
+class Botton2ImageLed(ButtonBehavior, BoxLayout):
+    """
+    🖥️ BOUTON INDUSTRIEL (Version 8.8 - Injection One-Shot)
+    Zéro Property Kivy, zéro bind parasite. Performance maximale pour l'atelier.
+    """
+    
+    DICTIONNAIRE_STATUS = {}
+
+    def __init__(self, **kwargs):
+        # 1. On intercepte les valeurs si elles viennent du pur Python (ex: ta Popup de 40 crans)
+        self.text_bouton = kwargs.pop('text', "- -")
+        self.source_image = kwargs.pop('source_image', "")
+        self.display_mode = kwargs.pop('display_mode', "TEXT_ONLY")
+        self.show_both = kwargs.pop('show_both', False)
+        self.current_status = kwargs.pop('statut_depart', "nominal")
+        self.target_screen = kwargs.pop('target_screen', "")
+
+        kwargs.setdefault('orientation', 'vertical')
+        kwargs.setdefault('padding', [dp(6), dp(6), dp(6), dp(6)])
+        kwargs.setdefault('spacing', dp(4))
+        kwargs.setdefault('size_hint', (1.0, 1.0))
+        super().__init__(**kwargs)
+
+        # 2. Widgets enfants vierges
+        self.ui_image = Image(fit_mode='contain', allow_stretch=True, size_hint_x=None, pos_hint={"center_x": 0.5})
+        self.ui_label = Label(bold=True, halign="center", valign="middle")
+        self.ui_label.bind(size=lambda instance, value: setattr(instance, 'text_size', value))
+        
+        self.add_widget(self.ui_image)
+        self.add_widget(self.ui_label)
+
+        # 3. Moteur de rendu graphique
+        with self.canvas.before:
+            self.draw_cadre_color = Color()
+            self.draw_cadre_rect = RoundedRectangle()
+            self.draw_bg_color = Color()
+            self.draw_bg_rect = RoundedRectangle()
+
+        # Le SEUL bind légitime de l'univers : réagir au redimensionnement physique de la fenêtre
+        self.bind(pos=self._rafraichir_geometrie_canvas, size=self._rafraichir_geometrie_canvas)
+
+
+    def on_kv_post(self, base_widget):
+        """ 🎯 L'INJECTEUR UNIQUE : Construit le catalogue avec les vraies couleurs de l'App """
+        if hasattr(self, 'text'): self.text_bouton = str(self.text)
+        if hasattr(self, 'display_mode'): self.display_mode = str(self.display_mode)
+        if hasattr(self, 'show_both'): self.show_both = bool(self.show_both)
+        if hasattr(self, 'target_screen'): self.target_screen = str(self.target_screen)
+        if hasattr(self, 'statut_depart'): self.current_status = str(self.statut_depart)
+        if hasattr(self, 'source_image'): self.source_image = str(self.source_image)
+
+        # 🎨 RÉCUPÉRATION DU COMPTOIR DES COULEURS DE L'APP
+        app = App.get_running_app()
+        tc = app.theme_colors if app else {}
+
+        # 🛠️ CREATION DU CATALOGUE SUR MESURE AVEC TES CLÉS DE CONVERSION HEXA
+        self.DICTIONNAIRE_STATUS = {
+            "nominal": { # Équivalent de ton bouton INACTIF (au repos, pas sur l'écran actif)
+                "cadre_color": tc.get("status_ok_ia", [0.12, 0.4, 0.13, 1]), # Vert éteint
+                "bg_color": tc.get("btn_bg_ia", [0.25, 0.25, 0.3, 1]),       # Fond de bouton ia
+                "off_x": 3.0, "off_y": 2.0, "dim_w": 4.0, "dim_h": 3.0,     # Effet relief haut
+                "radius": [5.0, 4.0, 5.0, 7.0],
+                "text_color": [0.7, 0.7, 0.7, 1]
+            },
+            "nominal_bg_claire": { # Équivalent de ton bouton INACTIF (au repos, pas sur l'écran actif)
+                "cadre_color": tc.get("status_ok_ia", [0.12, 0.4, 0.13, 1]), # Vert éteint
+                "bg_color": tc.get("btn_bg_a", [0.49, 0.49, 0.6, 1]),       # Fond de bouton a
+                "off_x": 3.0, "off_y": 2.0, "dim_w": 4.0, "dim_h": 3.0,     # Effet relief haut
+                "radius": [5.0, 4.0, 5.0, 7.0],
+                "text_color": [0.7, 0.7, 0.7, 1]
+            },
+            "actif": { # Équivalent de ton bouton EN FONCTION (Écran actif affiché)
+                "cadre_color": tc.get("status_ok_a", [0.2, 0.7, 0.3, 1]),   # Vert éclatant
+                "bg_color": tc.get("btn_bg_a", [0.49, 0.49, 0.6, 1]),        # Fond de bouton actif
+                "off_x": 1.0, "off_y": 1.0, "dim_w": 4.0, "dim_h": 3.0,     # Reste haut tant qu'il n'est pas cliqué
+                "radius": [6.0, 8.0, 6.0, 5.0],
+                "text_color": tc.get("btn_bg_a", [0.95, 0.95, 1, 1])
+            },
+            "nominal_warning": { # Équivalent de ton bouton INACTIF (au repos, pas sur l'écran actif)
+                "cadre_color": tc.get("status_warning_ia", [0.12, 0.4, 0.13, 1]), # Vert éteint
+                "bg_color": tc.get("btn_bg_ia", [0.25, 0.25, 0.3, 1]),       # Fond de bouton ia
+                "off_x": 3.0, "off_y": 2.0, "dim_w": 4.0, "dim_h": 3.0,     # Effet relief haut
+                "radius": [5.0, 4.0, 5.0, 7.0],
+                "text_color": tc.get("status_warning_a", [0.7, 0.7, 0.7, 1])
+            },
+            "actif_warning": { # Équivalent de ton bouton EN FONCTION (Écran actif affiché)
+                "cadre_color": tc.get("status_warning_a", [0.2, 0.7, 0.3, 1]),   #
+                "bg_color": tc.get("btn_bg_a", [0.49, 0.49, 0.6, 1]),        # Fond de bouton actif
+                "off_x": 3.0, "off_y": 2.0, "dim_w": 4.0, "dim_h": 3.0,     # Reste haut tant qu'il n'est pas cliqué
+                "radius": [6.0, 8.0, 6.0, 5.0],
+                "text_color": tc.get("status_warning_a",[0.95, 0.95, 1, 1])
+            },
+        }
+
+        if self.source_image:
+            self.ui_image.source = self.source_image
+
+        self.appliquer_statut_visuel(self.current_status)
+
+    def appliquer_statut_visuel(self, nom_statut: str, new_status= True):
+        """ 🎛️ COMMUTATEUR SANS BRUIT DE SURVEILLANCE """
+        style = self.DICTIONNAIRE_STATUS.get(self.current_status, self.DICTIONNAIRE_STATUS.get("nominal"))
+        
+        if not style:
+            return
+        
+        if new_status:
+            self.current_status = str(nom_statut).strip().lower()
+
+        self.ui_label.text = self.text_bouton
+        self.draw_cadre_color.rgba = style["cadre_color"]
+        self.draw_bg_color.rgba = style["bg_color"]
+        self.ui_label.color = style["text_color"]
+
+        if self.source_image:
+            self.ui_image.source = self.source_image
+
+        mode = self.display_mode if self.source_image else "TEXT_ONLY"
+
+        if mode == "BOTH":
+            self.ui_image.size_hint_y, self.ui_label.size_hint_y = 0.55, 0.45
+            self.ui_label.font_size = "10sp"
+            self.ui_image.opacity, self.ui_label.opacity = 1, 1
+        elif mode == "ICON_ONLY":
+            self.ui_image.size_hint_y, self.ui_label.size_hint_y = 1.0, None
+            self.ui_label.height = 0
+            self.ui_image.opacity, self.ui_label.opacity = 1, 0
+        else:
+            self.ui_image.size_hint_y, self.ui_label.size_hint_y = None, 1.0
+            self.ui_image.height = 0
+            self.ui_label.font_size = "13sp"
+            self.ui_image.opacity, self.ui_label.opacity = 0, 1
+
+        self._rafraichir_geometrie_canvas()
+
+    def _rafraichir_geometrie_canvas(self, *args):
+        """ 📐 CALCUL CHIRURGICAL DU CANVAS """
+        style = self.DICTIONNAIRE_STATUS.get(self.current_status, None)
+        if not style: return
+        
+        radius_dp = [dp(r) for r in style["radius"]]
+
+        self.draw_cadre_rect.pos = self.pos
+        self.draw_cadre_rect.size = self.size
+        self.draw_cadre_rect.radius = radius_dp
+
+        ox, oy = dp(style["off_x"]), dp(style["off_y"])
+        dw, dh = dp(style["dim_w"]), dp(style["dim_h"])
+        
+        self.draw_bg_rect.pos = (self.x + ox, self.y + oy)
+        self.draw_bg_rect.size = (self.width - dw, self.height - dh)
+        self.draw_bg_rect.radius = radius_dp
+
+        if self.ui_image.opacity == 1:
+            self.ui_image.width = self.ui_image.height
+
+    def on_release(self):
+        self.state = "normal"
+        return super().on_release()
 
 class CustomSpinnerOption(SpinnerOption):
     def on_parent(self, instance, parent):

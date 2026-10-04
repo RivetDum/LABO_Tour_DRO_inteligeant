@@ -63,7 +63,7 @@ draw_line= {    # couleurs et épaisseur de dessin
     # 🎨 Les Fonds de Boutons Standards (Onglets de Navigation)
     "btn_active_bg_a":    "#2e2e38",    # Fond de l'onglet sélectionné
     "btn_active_bg_ia":   "#1a1a20",    # Votre effet semi-reflet 3D
-    "btn_inactive_bg_a":  "#1f1f24",    
+    "btn_inactive_bg_a":  "#a6a6b6",    
     "btn_inactive_bg_ia": "#000000",
     # 🎛️ Le Thème Spécifique du Commutateur TACTILE (Différencié des onglets)
     "sw_active_bg_a":     "#212921",    # Fond teinté vert sombre si TACTILE est ON

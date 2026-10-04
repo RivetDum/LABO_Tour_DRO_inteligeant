@@ -15,6 +15,11 @@ class SimulationPanel(BoxLayout):
     def __init__(self, machine_instance, **kwargs):
         super().__init__(**kwargs)
         self.machine = machine_instance
+
+        #Juste pour  tester, je vais forcer l'offset d'outil:
+        self.machine.offset_tool_hor = -1000    # 1mm
+        self.machine.offset_tool_vert = -1000    # -1mm
+
         
         # 📐 ORIENTATION GLOBALE DU PANNEAU : Vertical
         self.orientation = 'vertical'
@@ -140,9 +145,14 @@ class SimulationPanel(BoxLayout):
             instance.text = "SIMULER E-STOP"
 
     def reste_pos(self, instance, state):
-        self.slider_z.value = 0
-        self.slider_x.value = 0
-        self.slider_y.value = 0
-        #self.simuler_axe_z(None, self.slider_z.value)
-        #self.simuler_axe_x(None, self.slider_x.value)
-        #self.simuler_axe_y(None, 0)
+        #self.slider_z.value = 0
+        #self.slider_x.value = 0
+        #self.slider_y.value = 0
+        self.machine.reset_hor_to_dro(0)
+        self.machine.reset_vert_to_dro(0)
+        self.machine.reset_sup_to_dro(0)
+        # 2️⃣ Synchronisation visuelle des sliders du pupitre de dev
+        # Assigner la valeur au slider va automatiquement appeler simuler_axe_x/z et rafraîchir les étiquettes !
+        self.slider_z.value = self.machine.z_machine
+        self.slider_x.value = self.machine.x_machine
+        self.slider_y.value = self.machine.y_machine

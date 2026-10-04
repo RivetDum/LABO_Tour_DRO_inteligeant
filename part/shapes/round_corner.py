@@ -44,6 +44,7 @@ class RoundedCornerShape(BaseShape):
         prof_conge = deepcopy(conge)
         self.draw_part = [prof_conge]
 
+
         ''' Pour info:
         Args:
             raw_list (list): Liste de dict des définitions brutes (type, points, etc.).
@@ -64,13 +65,16 @@ class RoundedCornerShape(BaseShape):
         entities.append(conge)  
         entities.append({"type":"l", "start":B, "end":C})
 
+        # TODO: à voir ci déplacable dans la partie dessin pour aléger en cas de non dessin
+        self.entities = cd.re_paint_entities(raw_list=cd.create_entities_from_raw(entities),draw_type="detail", liaison_line=1)
+
         self.draw_part = [conge]
         self.shape_start = conge.get("start", B)
         self.shape_end = conge.get("end", B)
+        self.shape_bbox_um = self.entities[1]["bbox"]
+        shape_bbox_0 = self.entities[0]["bbox"]
+        shape_bbox_2 = self.entities[2]["bbox"]
 
-
-        # TODO: à voir ci déplacable dans la partie dessin pour aléger en cas de non dessin
-        self.entities = cd.re_paint_entities(raw_list=cd.create_entities_from_raw(entities),draw_type="detail", liaison_line=1)
 
         # met à jour la boxe de dessin
         self.update_draw_shape(self.entities)

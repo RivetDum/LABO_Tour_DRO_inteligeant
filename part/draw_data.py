@@ -3,7 +3,8 @@
 import os
 from kivy.clock import Clock
 from kivy.app import App
-from kivy.properties import ListProperty
+from kivy.properties import ListProperty,NumericProperty, StringProperty
+#from kivy.properties import ListProperty, NumericProperty, StringProperty, BooleanProperty, ObjectProperty, DictProperty
 from kivy.metrics import dp
 import math
 import copy
@@ -26,7 +27,7 @@ from configurator.config import get_unit_id, parse_user_input, AXIS_CONFIG
 from part.draw_tool.popup_segment import SegmentPopupContent, PartManagerPopup, CalculatorPopup
 from part.draw_pnt_manager import PointValue, PointData, ColumnDefaultSpec
 from part.shapes.shape_editor import ShapeEditor    # part/shapes/shape_editor.py
-from common_draw import ProfilCanvas, DashedLineWidget
+from common_draw import ProfilCanvas, DashedLineWidget, BboxShowWidget
 
 
 # Ordre et identifiants uniques des colonnes (Clés d'axes ou de fonctions)
@@ -580,8 +581,8 @@ class RowEditor(BoxLayout):
         if "forme" in self.inputs:
             shape = self.entry.raw.get("shape")
             shape_label = self.entry.raw.get("shape_label")
-            print(f">>> Shape label: {shape_label}")
-            print(f">>> Shape raw: {shape}")
+            #print(f">>> Shape label: {shape_label}")
+            #print(f">>> Shape raw: {shape}")
 
             if isinstance(shape, (list, tuple)) and len(shape) == 2 and shape[0] is not None:
                 type_str, subtype_str = str(shape[0]), str(shape[1])
@@ -608,6 +609,7 @@ class CaoGraph(BoxLayout):
         self.mirror_vert = True
         self.offset_base = [0.5, 0.5]   
         self.offset_screen = [0.0, 0.0] 
+        self.bbox_um_editing = None # La bbox du point en édition à afficher (si "None" pas de point en édition)
  
         # ON INSTANCIE LE CANVAS APRÈS LE SUPER POUR S'ASSURER DES IDS
         self.canvas_piece = ProfilCanvas(
@@ -630,12 +632,16 @@ class CaoGraph(BoxLayout):
         repere_calcul = self.ids.box_calcul_gauche  
         
         if stencil and repere_calcul:
-            # 1️⃣ Injection de l'axe blanc
+            # 0: Injection de la bbox repaire actif
+            self.bbox_pnt_select = BboxShowWidget(line_color=[0.2, 1.0, 0.2, 0.8], line_width=1.0)
+            stencil.add_widget(self.bbox_pnt_select, index=0) 
+
+            # 1️⃣ Injection de l'axe de rotation
             self.axe_central = DashedLineWidget(
                 line_color=[1.0, 1.0, 1.0, 0.8], line_width=1.0,
                 dash_pattern=[dp(30), dp(5)], dash_spacing=dp(12)
             )
-            stencil.add_widget(self.axe_central, index=0)            
+            stencil.add_widget(self.axe_central, index=1)            
 
             # 2️⃣ Connexion et injection du canvas de la pièce
             self.canvas_piece.box_dest = repere_calcul
@@ -682,7 +688,7 @@ class CaoGraph(BoxLayout):
             margin=[0.1,0.1]
         )
 
-        # TRACÉ DE LA LIGNE D'AXE TOTALEMENT SÉCURISÉ (Plus de liste + float !)
+        # TRACÉ DE LA LIGNE D'AXE
         if hasattr(self.canvas_piece, 'offset_0') and len(self.canvas_piece.offset_0) > 1:
             y_axis_pos = self.canvas_piece.offset_0[1] # On prend la hauteur Y pixels
             
@@ -710,8 +716,24 @@ class CaoGraph(BoxLayout):
             # Sécurité si aucune pièce n'est chargée (Appel à vide d'origine)
             self.set_profil_pieces()
 
+    def set_edite_bbox(self, bbox_um):
+        mg = dp(16)  # Sur-marge de la box
+        if bbox_um != True:
+            self.bbox_um_editing = bbox_um
 
-class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
+        if bbox_um and hasattr(self.canvas_piece, 'offset_0') and len(self.canvas_piece.offset_0) > 1:
+            ofst0 = self.canvas_piece.offset_0
+            scale = self.canvas_piece.scale
+            minx, maxy = self.bbox_um_editing[0][0]* scale, self.bbox_um_editing[0][1]* -scale
+            maxx, miny = self.bbox_um_editing[1][0]* scale, self.bbox_um_editing[1][1]* -scale
+            bbox_screen = [[minx -mg + ofst0[0], miny -mg + ofst0[1]], [maxx +mg + ofst0[0], maxy +mg + ofst0[1]]]
+        else:
+            bbox_screen = None
+
+        if hasattr(self,"bbox_pnt_select"):
+            self.bbox_pnt_select.redraw_bbox(bbox_screen)
+
+class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !                  )
     def __init__(self, part_points, **kwargs):
         # 1️⃣ PROPRIÉTÉS ET CONSTANTES GÉOMÉTRIQUES CAO
         self.points_part = part_points  # instance de PointManager()
@@ -750,11 +772,11 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
 
         # Bouton Toggle Miroir Normalisé
         self.toggle_mirror = ToggleButton(
-            text=f"{Tr('mirror')} Z: {TR('off')}", 
+            text=f"{"Retourner"} Z: {TR('off')}", 
             state='normal', 
             size_hint=(None, None), 
             height=dp(50), 
-            width=dp(180), 
+            width=dp(160), 
             pos_hint={'center_y': 0.5}
         )
         self.toggle_mirror.bind(on_press=self.on_toggle_mirror)
@@ -773,8 +795,25 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
             on_click=self.open_part_popup
         )
 
+        # Label cliquable choix de la matière
+        part_mat_txt = "matière vc: ETG-100 "
+        self.part_mat_lbl = LabeledCell(
+            text=part_mat_txt, 
+            halign='center', 
+            bold=False,
+            bg_color=(0.52, 0.52, 0.52, 0.55),
+            height=dp(50),
+            size_hint=(None, None),
+            width=dp(250),
+            pos_hint={'center_y': 0.5},
+            #on_click=self.open_part_popup
+        )
+
         # Assemblage de l'entête CAO
+        top_bar.add_widget(Widget()) # Espaceur élastique central
         top_bar.add_widget(self.part_name_lbl)
+        top_bar.add_widget(Widget()) # Espaceur élastique central
+        top_bar.add_widget(self.part_mat_lbl)
         top_bar.add_widget(Widget()) # Espaceur élastique central
         top_bar.add_widget(self.toggle_mirror)
 
@@ -993,6 +1032,10 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
 
         entries = self.points_part.entries
 
+        # Supprime la bbox de sélection si pas de sélection !
+        if self.editing_index is None and 'graph_box' in self.ids and self.ids['graph_box']:
+            self.ids["graph_box"].set_edite_bbox(None)
+
         for i, entry in enumerate(entries):
             if entry.data is None:
                 continue  # Ne rien afficher si pas de data
@@ -1020,6 +1063,16 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
                     parent_editor=self  # ← ICI tu passes PointDrawEditor
                 )
                 self.display_rows.add_widget(editor)
+
+
+                if 'graph_box' in self.ids and self.ids['graph_box']:
+                    if hasattr(entry,'shape_bbox_um'):
+                        self.ids["graph_box"].set_edite_bbox(entry.shape_bbox_um)
+                    else:
+                        self.ids["graph_box"].set_edite_bbox(None)
+
+
+
             else:
                 row = PointRow(index=i, entry=entry, is_start=is_start)
                 
@@ -1039,6 +1092,12 @@ class PointDrawEditor(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis
                 fao_list=[], 
                 cao_list=self.points_part.curent_profile_seg_net # La ligne verte se déforme en direct !
             )
+            if self.editing_index:
+                if hasattr(self.points_part.entries[self.editing_index],'shape_bbox_um'):
+                    self.ids["graph_box"].set_edite_bbox(self.points_part.entries[self.editing_index].shape_bbox_um)
+                else:
+                    self.ids["graph_box"].set_edite_bbox(None)
+            #else: Pas besoin de else, il est déjà clear() si pas de sélection !                
 
     def update_row_data(self, index, new_hor, new_vert, refresh=True):
         """Mise à jour d'une rangée via l'IHM tactile (Boutons +/-, molettes ou raccourcis)."""

@@ -25,8 +25,9 @@ from screen_base.common_screen import BaseScreenLayout
 class AxisBox(BoxLayout):
     status = NumericProperty(0)
     axe_ident = StringProperty(None)
+    special = StringProperty(None)
 
-    def __init__(self, status=0, height_line=70, wide=True, special=None, **kwargs):
+    def __init__(self, status=0, height_line=70, wide=True, **kwargs):
         super().__init__(**kwargs)
 
         # --- Props internes ---
@@ -34,13 +35,13 @@ class AxisBox(BoxLayout):
         self.size_hint_y= 1
         self.height_line = height_line
         self.wide = wide
-        self.special = special
+        #self.special = special
         self.clickable_cells: dict = {}
         # --- Layout ---
         self.orientation = "horizontal" if wide else "vertical"
         #self.size_hint_y = None
-        self.spacing = 30 if wide else 10
-        self.padding = (8, 1, 8, 10)
+        self.spacing = 20   #30 if wide else 10
+        self.padding = (5, 5, 5, 0)
         # --- Canvas ---
         with self.canvas.before:
             self.bg_color = Color(*self._compute_bg_color())
@@ -63,6 +64,10 @@ class AxisBox(BoxLayout):
             height=self.height_line
         )
         self.add_widget(self.ax_dim)
+
+        self.box_compl= BoxLayout()
+        self.box_compl.size_hint_x = 0 if self.special is None else 1
+        self.add_widget(self.box_compl)
 
         # Complément éventuel
         self.ax_compl = None
@@ -97,6 +102,9 @@ class AxisBox(BoxLayout):
             if self.ax_compl:
                 self.ax_compl.axe_ident = value
             #print(f"Le texte a changé : {value}")
+
+            if self.special:
+                self.box_compl.size_hint_x= 1
 
     # ---- Helpers ----
 
@@ -342,7 +350,7 @@ class DroGraph(BoxLayout):
     # LE COMMUTATEUR DE SIGNAL : False = Burin_Mobile (Inspection) | True = Piece_Mobile (Usinage standard)
     move_mode = BooleanProperty(True)
     
-    offset_tool_image = StringProperty("")
+    offset_tool_image = StringProperty("bitmaps/icone.png")
 
     def __init__(self, **kwargs):
         # 1. Variables d'animation centralisées (Territoire Écran)
@@ -366,7 +374,7 @@ class DroGraph(BoxLayout):
 
     def on_kv_post(self, base_widget):
         #test:
-        self.offset_tool_image = "bitmaps/tool_0_centre.png"
+        #self.offset_tool_image = app.dro_visual_offset_cut[3]
         """DÉCLENCHEUR SÉCURISÉ : Les ID sont prêts, on effectue le premier ancrage de boîte."""
         container_global = self.ids.zone_globale
         stencil = self.ids.zone_decoupe
@@ -425,7 +433,10 @@ class DroGraph(BoxLayout):
         """Filtre les listes et les envoie via la vanne officielle."""
         import common_draw as cdraw
 
-        temptest = [cdraw.creat_entry_round([0,0],1000)]
+        # TODO: TEMP: Remplacement du dessin de l'outil par un rond
+        app_cutter = App.get_running_app().lib_cutter.active_cutter
+        temptest_radius = app_cutter.insert.drawing[0].radius_base
+        temptest = [cdraw.creat_entry_round([0,0],temptest_radius)]
 
         cutter_prepares = None
         #if cut_draw is not None and len(cut_draw) > 0:
@@ -576,7 +587,7 @@ class DroGraph(BoxLayout):
             #print(f"[DRO] Recentrage Usinage : Bec de coupe [0,0] aligné sur le ratio {offsetratio}. Pièce mobile.")
             
         else:
-            # 🔵 MODE INSPECTION (Burin_Mobile = False | Pièce Fixe) :
+            # 🔵 MODE INSPECTION (Piece_Mobile = False | Pièce Fixe) :
             # On extrait le centre géométrique réel de la silhouette CAO en microns
             infos_centre = self.canvas_piece.get_center_draw()
             center_um = infos_centre.get("center_um", [0.0, 0.0])
@@ -754,6 +765,10 @@ class DroGraph(BoxLayout):
         return super().on_touch_up(touch)
 
 class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
+    
+    offset_tool_hor = NumericProperty(0)    # Décalage entre le Z et longueur affiché et le centre de l'outil
+    offset_tool_vert = NumericProperty(0)   # Décalage (au rayon) entre le X et diamètre affiché et le centre de l'outil
+                   
     def __init__(self, part, cutter, machine, **kwargs):
         self.part = part        
         self.cutter = cutter    
@@ -791,8 +806,8 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
         # 3️⃣ LIAISON DES IDENTIFIANTS DE TON CODE HISTORIQUE
         # Puisque les widgets ont été créés en Python, on mappe leurs boutons/champs manuellement
         self.axes_head = {
-            "vert3": header.ids.header_vert,
-            "hor3": header.ids.header_hor,
+            "vert3_dro": header.ids.header_vert,
+            "hor3_dro": header.ids.header_hor,
             "sup": header.ids.header_sup
         }
         
@@ -830,8 +845,8 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
             # TODO: Test cutter
             graph.set_profil_cutter(
                 box=True, 
-                offset_draw=[], 
-                cut_draw=App.get_running_app().part.curent_profile_seg_net
+                #offset_draw=[], 
+                #cut_draw=App.get_running_app().part.curent_profile_seg_net
             )
 
         positions_initiales = self.machine.generer_dictionnaire_dro()
@@ -857,8 +872,8 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
                     box_axe.ax_dim.new_val(val)
 
         # C. PROPAGATION DES MICRONS VERS LE DESSIN DRO (Ton DroGraph)
-        microns_hor = data.get("hor3", 0.0)
-        microns_vert = data.get("vert3", 0.0)
+        microns_hor = data.get("hor3_mcu", 0.0)
+        microns_vert = data.get("vert3_mcu", 0.0)
         self.ids.graph_box.distribuer_mouvements_canvas([microns_hor, microns_vert])
 
     #ÉCRAN
@@ -869,10 +884,14 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
         via le canal officiel pour conserver le zoom et les offsets de l'opérateur.
         """
         app_vivante = App.get_running_app()
+
+        app_vivante.machine.up_date_y_angle(app_vivante.offset_page_instance.axe_y_angle[0])
         
         # 2️⃣ GESTION ET MISE À JOUR DU VISUALISEUR GRAPHIQUE
         if 'graph_box' in self.ids:
             graph = self.ids['graph_box']
+
+            graph.offset_tool_image = app_vivante.dro_visual_offset_cut[3]
             
             # A. Rafraîchissement textuel du nom de la pièce CAO dans le panneau droit (15% fumé)
             if 'cao_name_lbl' in graph.ids:
@@ -888,10 +907,17 @@ class DroManager(BaseScreenLayout):  # 🛠️ Héritage direct du Châssis !
                     fao_list=None, 
                     cao_list=app_vivante.part.curent_profile_seg_net
                 )
+                # TODO: Test cutter
+                graph.set_profil_cutter(
+                    box=True, 
+                    #offset_draw=[], 
+                    #cut_draw=App.get_running_app().part.curent_profile_seg_net
+                )
+
             # C. Relance instantanée du pinceau rapide à 60Hz pour ré-aligner les microns machine
             donnees_initiales = self.machine.generer_dictionnaire_dro()
-            microns_hor = donnees_initiales.get("hor", 0.0)
-            microns_vert = donnees_initiales.get("vert", 0.0)
+            microns_hor = donnees_initiales.get("hor3_mcu", 0.0)
+            microns_vert = donnees_initiales.get("vert3_mcu", 0.0)
             graph.distribuer_mouvements_canvas([microns_hor, microns_vert])
             
         print("[PAGE DRO] Réveil autonome exécuté via set_profil_pieces (Zoom & Pan préservés).")

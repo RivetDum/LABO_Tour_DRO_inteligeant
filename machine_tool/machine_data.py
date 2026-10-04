@@ -1,6 +1,7 @@
 # machine_tool/machine_data.py
 
 import os
+from kivy.app import App
 import time
 import math
 from kivy.lang import Builder
@@ -17,6 +18,11 @@ class MachineState:
         self.x_machine = int(axis_cfg.get("vert", {}).get("last_position_micron", 0)) 
         self.y_machine = int(axis_cfg.get("sup", {}).get("last_position_micron", 0))  
         self.spindle_machine = int(axis_cfg.get("s", {}).get("last_position_micron", 0)) 
+
+        self.offset_tool_hor = 0    # Décalage entre le Z et longueur affiché et le centre de l'outil
+        self.offset_tool_vert = 0   # Décalage (au rayon) entre le X et diamètre affiché et le centre de l'outil
+        self.y_axe_sin = 0  # Sinus de l'axe d'orientation du chariot Y
+        self.y_axe_cos = 1  # Cosinus de l'axe d'orientation du chariot Y
 
         # ====================================================================
         # CONFIGURATION FIXE (Sera lue/écrite dans mcu_param.json)
@@ -67,36 +73,62 @@ class MachineState:
         fl_x_mach = float(self.x_machine)
         fl_y_mach = float(self.y_machine)
         fl_z_mach = float(self.z_machine)
-
-        self.y_rad_float = float(format_unit(float(axis_cfg.get("sup", {}).get("angle", 0)), "rad"))
-        self.hor3_base = int(fl_z_mach + fl_y_mach* math.cos(self.y_rad_float))
-        self.vert3_base = int(fl_x_mach + fl_y_mach* math.sin(self.y_rad_float))
+                
+        y_rad_float = float(format_unit(float(axis_cfg.get("sup", {}).get("angle", 0)), "rad"))
+        self.y_axe_sin = math.sin(y_rad_float)
+        self.y_axe_cos = math.cos(y_rad_float)
+        #self.hor3_base = int(fl_z_mach + fl_y_mach* math.cos(self.y_rad_float))
+        #self.vert3_base = int(fl_x_mach + fl_y_mach* math.sin(self.y_rad_float))
+        self.hor3_base = int(fl_z_mach + fl_y_mach* self.y_axe_cos)
+        self.vert3_base = int(fl_x_mach + fl_y_mach* self.y_axe_sin)
 
 
     def generer_dictionnaire_dro(self):
-        """Envoie les valeurs de base brutes."""
+        """Envoie les valeurs de base brutes pour l'affichage visuel.
+            Les offsets de l'outil, décalage entre le centre et la tangeante de touche,
+            sont déjà ajustés dans cette réponce !
+        """
         self.calc_hor3_vert3()  # Màj du diamètre toal et longueur total
 
         return {
-            "vert": self.x_machine,
-            "hor": self.z_machine,
+            "vert": self.x_machine + self.offset_tool_vert,
+            "hor": self.z_machine + self.offset_tool_hor,
             "sup": self.y_machine,
             "s": self.spindle_machine,
-            "vert3": self.vert3_base,
-            "hor3": self.hor3_base
+            "vert3_mcu": self.vert3_base,
+            "hor3_mcu": self.hor3_base,
+            "vert3_dro": self.vert3_base + self.offset_tool_vert,
+            "hor3_dro": self.hor3_base + self.offset_tool_hor
         }
 
     def calc_hor3_vert3(self):
-        import math
-        axis_cfg = SETTINGS.get("axis", {})
         fl_x_mach = float(self.x_machine)
         fl_y_mach = float(self.y_machine)
         fl_z_mach = float(self.z_machine)
 
-        self.y_rad_float = float(format_unit(float(axis_cfg.get("sup", {}).get("angle", 0)), "rad"))
-        self.hor3_base = int(fl_z_mach + fl_y_mach* math.cos(self.y_rad_float))
-        self.vert3_base = int(fl_x_mach + fl_y_mach* math.sin(self.y_rad_float))
+        #self.y_rad_float = float(format_unit(float(axis_cfg.get("sup", {}).get("angle", 0)), "rad"))
+        #self.hor3_base = int(fl_z_mach + fl_y_mach* math.cos(self.y_rad_float))
+        #self.vert3_base = int(fl_x_mach + fl_y_mach* math.sin(self.y_rad_float))
+        self.hor3_base = int(fl_z_mach + fl_y_mach* self.y_axe_cos)
+        self.vert3_base = int(fl_x_mach + fl_y_mach* self.y_axe_sin)
 
+    def up_date_y_angle(self,new_base_angle: int):
+        import math
+        app = App.get_running_app()
+
+        #axis_cfg = SETTINGS.get("axis", {})
+        y_rad_float = float(format_unit(float(new_base_angle), "rad"))
+        self.y_axe_sin = math.sin(y_rad_float)
+        self.y_axe_cos = math.cos(y_rad_float)
+        self.offset_tool_hor = app.dro_visual_offset_cut[0]
+        self.offset_tool_vert = app.dro_visual_offset_cut[1]
+
+    def reset_hor_to_dro(self, new_hor_base = 0):
+        self.z_machine = new_hor_base - self.offset_tool_hor
+    def reset_vert_to_dro(self, new_vert_base = 0):
+        self.x_machine = new_vert_base - self.offset_tool_vert
+    def reset_sup_to_dro(self, new_sup_base = 0):
+        self.y_machine = new_sup_base
 
     def alerte_time_msg_in(self, receve_time, receve_source):
         """

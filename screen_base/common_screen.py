@@ -24,45 +24,22 @@ class BaseScreenToolBar(BoxLayout):
     pass
 
 
-class BaseScreenLayout(BoxLayout):
+
+
+class FullTactileScreenLayout(BoxLayout):
     """
     GABARIT CHÂSSIS UNIVERSEL :
-    Fournit l'entête haute (header_zone), la barre d'outils (tools_bar) 
-    et la zone de contenu (body_zone).
+    Fournit un BoxLayoute plein écran et une couche (FloatLayout) pour la saisie dans label
     """
 
-    page_status_alert = StringProperty("OK")    # Stocke en permanence le statut de santé local de l'écran ("OK", "MODIFIED", "WARNING", "ERROR").
-    icon_page = StringProperty("")              # Stocke l'icône de la page pour la màj auto de son kv kv
-    associated_target_screen = StringProperty("")
+    parent_target_screen = StringProperty("")   # La page qui àouvert cet écran
 
-    def on_kv_post(self, base_widget):
-        app = App.get_running_app()
-        if app and self.associated_target_screen:
-            # 📡 On branche l'écoute automatique sur le dictionnaire du main()
-            app.bind(**{self.associated_target_screen: self._auto_sync_from_main})
-            self._auto_sync_from_main()
-
-    def _auto_sync_from_main(self, *args):
-        app = App.get_running_app()
-        if app and self.associated_target_screen:
-            dict_main = getattr(app, self.associated_target_screen, None)
-            if dict_main:
-                self.icon_page = str(dict_main.get("icon", ""))
-                self.page_status_alert = str(dict_main.get("status", "OK"))
-
-    def injecter_entete_specifique(self, widget_entete):
-            """Clipse un bandeau d'infos personnalisé dans la ligne du haut."""
-            if not widget_entete:
-                return
-
-            self.ids.header_zone.add_widget(widget_entete)
-
-    def injecter_corps_specifique(self, widget_corps):
+    def injecter_full_page(self, widget_page):
         """Clipse le formulaire métier (DRO, CAO, etc.) dans la zone de droite."""
-        if widget_corps:
+        if widget_page:
             # 🎯 Cible le tiroir body_zone
-            self.ids.body_zone.clear_widgets()
-            self.ids.body_zone.add_widget(widget_corps)
+            self.ids.box_zone.clear_widgets()
+            self.ids.box_zone.add_widget(widget_page)
 
 # Dans screen_base/common_screen.py -> classe BaseScreenLayout
 
@@ -186,4 +163,91 @@ class BaseScreenLayout(BoxLayout):
             
             # Retour à l'envoyeur avec le badge "OK" !
             on_success_func("OK")
+
+class BaseMenuScreen(BoxLayout):
+    pass
+
+class BaseScreenLayout(FullTactileScreenLayout):
+    """
+    GABARIT CHÂSSIS UNIVERSEL :
+    Fournit l'entête haute (header_zone), la barre d'outils (tools_bar) 
+    et la zone de contenu (body_zone).
+    """
+
+    page_status_alert = StringProperty("OK")    # Stocke en permanence le statut de santé local de l'écran ("OK", "MODIFIED", "WARNING", "ERROR").
+    icon_page = StringProperty("")              # Stocke l'icône de la page pour la màj auto de son kv kv
+    associated_target_screen = StringProperty("")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+                # 🎯 TON IDÉE EN ACTION :
+        # 1. On crée le widget d'habillage standard (En-tête + Menu à gauche)
+        self.habillage = BaseMenuScreen()
+        
+        # 2. On l'injecte directement dans la box_zone héritée de la maman tactile !
+        self.ids.box_zone.add_widget(self.habillage)
+        
+        # 3. Pour que tes anciennes fonctions continuent de marcher sans rien changer,
+        # on crée des raccourcis vers les IDs de l'habillage
+        self.ids["header_zone"] = self.habillage.ids.header_zone
+        self.ids["body_zone"] = self.habillage.ids.body_zone
+
+    def on_kv_post(self, base_widget):
+        app = App.get_running_app()
+        if app and self.associated_target_screen:
+            # 📡 On branche l'écoute automatique sur le dictionnaire du main()
+            app.bind(**{self.associated_target_screen: self._auto_sync_from_main})
+            self._auto_sync_from_main()
+
+    def _auto_sync_from_main(self, *args):
+        app = App.get_running_app()
+        if app and self.associated_target_screen:
+            dict_main = getattr(app, self.associated_target_screen, None)
+            if dict_main:
+                self.icon_page = str(dict_main.get("icon", ""))
+                self.page_status_alert = str(dict_main.get("status", "OK"))
+
+    def injecter_entete_specifique(self, widget_entete):
+        """ Clipse un bandeau d'infos personnalisé dans la ligne du haut. """
+        if not widget_entete:
+            return
+
+        # 🟢 CORRECTION DE SÉCURITÉ :
+        # Au lieu de self.ids.header_zone qui n'est pas encore fusionné par Kivy,
+        # on va directement chercher l'ID à l'intérieur de l'habillage qu'on possède en RAM !
+        '''if hasattr(self, 'habillage') and 'header_zone' in self.habillage.ids:
+            self.habillage.ids.header_zone.add_widget(widget_entete)
+            
+        el'''
+        if 'header_zone' in self.ids:
+            # Filet de sécurité classique si Kivy finit par fusionner l'ID plus tard
+            self.ids.header_zone.add_widget(widget_entete)
+            
+        else:
+            # Sécurité absolue d'atelier : si Kivy fait sa course de vitesse, 
+            # on repousse d'un tick d'horloge pour être 100% sûr
+            from kivy.clock import Clock
+            Clock.schedule_once(lambda dt: self.injecter_entete_specifique(widget_entete), 0)
+
+    def injecter_corps_specifique(self, widget_corps):
+        """Clipse le formulaire métier (DRO, CAO, etc.) dans la zone de droite."""
+        if widget_corps:
+            # 🟢 CORRECTION DE SÉCURITÉ :
+            # Au lieu de self.ids.header_zone qui n'est pas encore fusionné par Kivy,
+            # on va directement chercher l'ID à l'intérieur de l'habillage qu'on possède en RAM !
+            '''if hasattr(self, 'habillage') and 'body_zone' in self.habillage.ids:
+                self.habillage.ids.body_zone.clear_widgets()
+                self.habillage.ids.body_zone.add_widget(widget_corps)
+                
+            el'''
+            if 'body_zone' in self.ids:
+                # Filet de sécurité classique si Kivy finit par fusionner l'ID plus tard
+                self.ids.body_zone.clear_widgets()
+                self.ids.body_zone.add_widget(widget_corps)
+                
+            else:
+                # Sécurité absolue d'atelier : si Kivy fait sa course de vitesse, 
+                # on repousse d'un tick d'horloge pour être 100% sûr
+                from kivy.clock import Clock
+                Clock.schedule_once(lambda dt: self.injecter_corps_specifique(widget_corps), 0)
 

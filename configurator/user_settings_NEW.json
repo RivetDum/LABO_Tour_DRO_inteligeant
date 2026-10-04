@@ -36,7 +36,7 @@
         "fao_y_mode_selected": "fillet",
         "fao_r_mode_selected": "",
         "selected_part_idx": 4,
-        "selected_tool_ident": "199", 
+        "selected_tool": ["199", 0], 
         "vc_ref_mat_idx": 0, "auto_vc": false,
         "tactile_keyboard": true
     },

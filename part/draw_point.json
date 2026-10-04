@@ -39,50 +39,41 @@
         {
             "name": "Pièce B",
             "points": [
-                {"pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}},
-                {"pos": [0,4000],"shape": ["standard","Chanfrein"],"shape_label": "","shape_params": {"largeur_a": [2000,false],"symetry": [0,false]}},
-                {"pos": [-35000,4000],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.4)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 400,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "axis","ref_appuis": "B-A"}},
-                {"pos": [-35000,8000],"shape": null,"shape_label": null,"shape_params": {}},
-                {"pos": [-38000,8000],"shape": null,"shape_label": null,"shape_params": {}},
-                {"pos": [-38000,6000],"shape": null,"shape_label": null,"shape_params": {}},
-                {"pos": [-42000,6000],"shape": null,"shape_label": null,"shape_params": {}},
-                {"pos": [-42000,8000],"shape": null,"shape_label": null,"shape_params": {}},
-                {"pos": [-45000,8000],"shape": ["rond","Congé"],"shape_label": "Congé (R=3.0)","shape_params": {"rayon_conge": 3000}},
-                {"pos": [-45000,0],"shape": null,"shape_label": null,"shape_params": {}}
+                {"pos": [20000,0],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [20000,10000],"shape": ["gorge","Filet_ISO"],"shape_label": "filet ISO (D-4.0/4.5/R1.8)","shape_params": {"largeur": 4500,"profondeur": 2000,"rayon_fond": 1800,"angle_entrer": 15000,"invert_dir": true,"ref_portee": "axis","ref_appuis": "B-A"}},
+                {"pos": [-20000,10000],"shape": ["gorge","Filet_ISO"],"shape_label": "filet ISO (D-4.0/4.5/R1.8)","shape_params": {"largeur": 4500,"profondeur": 2000,"rayon_fond": 1800,"angle_entrer": 75000,"invert_dir": false,"ref_portee": "axis","ref_appuis": "B-A"}},
+                {"pos": [-20000,0],"shape": null,"shape_label": null,"shape_params": {}}
             ]
         },
         {
             "name": "Cône 8%",
             "points": [
-                {"pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}},
-                {"pos": [0,9900],"shape": ["angle","Chanfrein"],"shape_label": "","shape_params": {"largeur_a": [1500,false],"angle_c": [30000,false]}},
-                {"pos": [-40000,11500],"shape": ["gorge","Filet_ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.4)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 400,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "B-A","ref_appuis": "B-A"}},
+                {"pos": [-1000,0],"shape": null,"shape_label": null,"shape_params": {}},
+                {"pos": [-1000,4000],"shape": ["angle","Congé"],"shape_label": "Congé (R=30.0)","shape_params": {"rayon_conge": 30000}},
+                {"pos": [0,7900],"shape": null,"shape_label": "","shape_params": {}},
+                {"pos": [0,9900],"shape": ["angle","Chanfrein"],"shape_label": "","shape_params": {"largeur_a": [2000,false],"angle_a": [45000,false]}},
+                {"pos": [-40000,11500],"shape": ["gorge","Filet_ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.8)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 800,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "B-A","ref_appuis": "B-C"}},
                 {"pos": [-40000,20000],"shape": null,"shape_label": "","shape_params": {}},
-                {"pos": [-60000,20000],"shape": ["angle","Congé"],"shape_label": "Congé (R=18.0)","shape_params": {"rayon_conge": 18000}},
-                {"pos": [-60000,0],"shape": null,"shape_label": null,"shape_params": {}}
+                {"pos": [-55000,15000],"shape": ["angle","Congé"],"shape_label": "Congé (R=20.0)","shape_params": {"rayon_conge": 20000}},
+                {"pos": [-55000,0],"shape": null,"shape_label": null,"shape_params": {}}
             ]
         },
         {
-            "name": "Pièce test_D",
+            "name": "Axe pour la machine à pattates de Dupond Jean-Marcel",
             "points": [
-                {"pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}},
-                {"pos": [0,10000],"shape": ["standard","Chanfrein"],"shape_label": "","shape_params": {"largeur_a": [1500,false],"angle_c": [30000,false]}},
-                {"pos": [-40000,10000],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.8)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 800,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "axis","ref_appuis": "B-A"}},
-                {"pos": [-40000,20000],"shape": null,"shape_label": "","shape_params": {}},
-                {"pos": [-60000,20000],"shape": ["rond","Congé"],"shape_label": "Congé (R=15.0)","shape_params": {"rayon_conge": 15000}},
-                {"pos": [-60000,0],"shape": null,"shape_label": null,"shape_params": {}}
+                {"pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}}
             ]
         },
         {
             "name": "Pièce E",
             "points": [
                 {"pos": [0,0],"shape": null,"shape_label": null,"shape_params": {}},
-                {"pos": [0,4000],"shape": ["standard","Chanfrein"],"shape_label": "","shape_params": {"largeur_a": [1700,false],"symetry": [0,false]}},
-                {"pos": [-20000,4000],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.8)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 800,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "B-A","ref_appuis": "B-A"}},
-                {"pos": [-20000,15000],"shape": ["standard","Congé"],"shape_label": "Congé (R=2.0)","shape_params": {"rayon_conge": 2000}},
-                {"pos": [-50000,15000],"shape": ["standard","Congé"],"shape_label": "Congé (R=2.0)","shape_params": {"rayon_conge": 2000}},
-                {"pos": [-50000,4000],"shape": ["filet_gorge","ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.8)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 800,"angle_entrer": 45000,"invert_dir": true,"ref_portee": "B-A","ref_appuis": "B-A"}},
-                {"pos": [-70000,4000],"shape": ["rond","Congé"],"shape_label": "Congé (R=2.0)","shape_params": {"rayon_conge": 2000}},
+                {"pos": [0,6000],"shape": ["angle","Congé"],"shape_label": "Congé (R=2.0)","shape_params": {"rayon_conge": 2000}},
+                {"pos": [-20000,6000],"shape": ["gorge","Filet_ISO"],"shape_label": "filet ISO (D-3.0/4.5/R0.4)","shape_params": {"largeur": 4500,"profondeur": 1500,"rayon_fond": 400,"angle_entrer": 30000,"invert_dir": false,"ref_portee": "axis","ref_appuis": "B-A"}},
+                {"pos": [-20000,15000],"shape": ["angle","Chanfrein"],"shape_label": "","shape_params": {"largeur_c": [2000,false],"angle_c": [20000,false]}},
+                {"pos": [-50000,15000],"shape": ["angle","Congé"],"shape_label": "Congé (R=4.0)","shape_params": {"rayon_conge": 4000}},
+                {"pos": [-50000,4000],"shape": ["gorge","Filet_ISO"],"shape_label": "filet ISO (D-1.8/4.5/R0.4)","shape_params": {"largeur": 4500,"profondeur": 900,"rayon_fond": 400,"angle_entrer": 30000,"invert_dir": true,"ref_portee": "axis","ref_appuis": "B-A"}},
+                {"pos": [-70000,4000],"shape": ["angle","Chanfrein"],"shape_label": "","shape_params": {"largeur_a": [2000,false],"angle_a": [30000,false]}},
                 {"pos": [-70000,0],"shape": null,"shape_label": null,"shape_params": {}}
             ]
         }
